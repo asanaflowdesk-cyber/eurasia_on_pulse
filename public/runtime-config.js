@@ -1,0 +1,4 @@
+window.PULSE_CONFIG = {
+  SUPABASE_URL: "https://nxjtciefdigtqnwomxen.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54anRjaWVmZGlndHFud29teGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwOTkyMjAsImV4cCI6MjA5NDY3NTIyMH0.zQYUmgmd-bj8cxx1dGFlBjSB4jz_LE93HVbwTggPMfs"
+};
