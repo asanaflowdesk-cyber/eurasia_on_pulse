@@ -60,19 +60,97 @@ function renderPlan(){ const f=filteredPosts().filter(p=>p.post_date); let html=
 function rowHtml(p){ return `<div class="post-row ${state.selectedPost===p.id?'selected':''} ${state.dirty.has(p.id)?'dirty':''}" data-id="${p.id}"><div><div>${esc(label('slot',p.slot,SLOTS[p.slot]?.[0]))}${state.dirty.has(p.id)?'<span class="dot"></span>':''}</div><div class="small muted">нед. ${p.week_no}</div></div><div><span class="badge" style="${badgeStyle(hex('block',p.block))}">${esc(label('block',p.block,BLOCKS[p.block]))}</span></div><div><div class="topic">${esc(p.topic)}</div><div class="hashtag">${esc(p.hashtag||'')}</div></div><div><span class="badge" style="${badgeStyle(hex('status',p.status))}">${esc(label('status',p.status,STATUS[p.status]))}</span></div><div class="small muted">${esc(p.owner||'')}</div></div>`; }
 function bindPostRows(){ $$('.post-row').forEach(r=>r.onclick=()=>{ state.selectedPost=r.dataset.id; logEvent('open_post','post',state.selectedPost); render(); }); }
 function selectedPost(){ return state.posts.find(p=>p.id===state.selectedPost); }
-function postEditor(){ const p=selectedPost(); if(!p) return '<div class="empty">Выберите пост</div>'; const disabled=canEditPost(p)?'':'disabled'; return `${!canEditPost(p)?'<div class="message">Только чтение</div>':''}
+function postEditor(){
+  const p=selectedPost();
+  if(!p) return '<div class="empty">Выберите пост</div>';
+  const disabled=canEditPost(p)?'':'disabled';
+  return `${!canEditPost(p)?'<div class="message">Только чтение</div>':''}
   <div class="form-row"><label>Тема</label><input value="${esc(p.topic)}" data-post-field="topic" ${disabled}></div>
-  <div class="grid2"><div class="form-row"><label>Дата</label><input type="date" value="${esc(p.post_date||'')}" data-post-field="post_date" ${disabled}></div><div class="form-row"><label>Слот</label><select data-post-field="slot" ${disabled}>${opts('slot',p.slot,SLOTS)}</select></div></div>
-  ${pubDatePicker(p)}
+  <div class="grid2"><div class="form-row"><label>Дата</label>${postDateField(p,disabled)}</div><div class="form-row"><label>Слот</label><select data-post-field="slot" ${disabled}>${opts('slot',p.slot,SLOTS)}</select></div></div>
   <div class="grid2"><div class="form-row"><label>Статус</label><select data-post-field="status" ${disabled}>${opts('status',p.status,STATUS)}</select></div><div class="form-row"><label>Блок</label><select data-post-field="block" ${disabled}>${opts('block',p.block,BLOCKS)}</select></div></div>
   <div class="form-row"><label>Хэштег</label><select data-post-field="hashtag" ${disabled}>${tagOptions(p.block,p.hashtag)}</select></div>
   <div class="form-row"><label>Цель</label><input value="${esc(p.goal||'')}" data-post-field="goal" ${disabled}></div>
   <div class="grid2"><div class="form-row"><label>Формат</label><input value="${esc(p.format||'')}" data-post-field="format" ${disabled}></div><div class="form-row"><label>Аудитория</label><input value="${esc(p.audience||'')}" data-post-field="audience" ${disabled}></div></div>
   <div class="form-row"><label>CTA</label><input value="${esc(p.cta||'')}" data-post-field="cta" ${disabled}></div>${materialsBox(p)}
-  <div class="form-row"><label>Текст поста</label><textarea data-post-field="content_text" ${disabled}>${esc(p.content_text||'')}</textarea></div><div class="form-row"><label>Заметки</label><textarea data-post-field="notes" ${disabled}>${esc(p.notes||'')}</textarea></div>
+  <div class="grid2 compact-text-row"><div class="form-row"><label>Текст поста</label><textarea data-post-field="content_text" ${disabled}>${esc(p.content_text||'')}</textarea></div><div class="form-row"><label>Заметки</label><textarea data-post-field="notes" ${disabled}>${esc(p.notes||'')}</textarea></div></div>
   <div class="save-line"><span class="hint">${state.dirty.has(p.id)?'Есть несохранённые изменения':'Изменений нет'}</span><button class="btn primary" id="savePostBtn" ${state.dirty.has(p.id)&&canEditPost(p)?'':'disabled'}>Сохранить</button></div>
-  <div class="actions" style="margin-top:8px"><button class="btn" id="dupPostBtn">Дублировать</button><button class="btn danger" id="deletePostBtn" ${canEditPost(p)?'':'disabled'}>Скрыть</button></div>`; }
-function bindPostEditor(){ const p=selectedPost(); if(!p) return; $$('[data-post-field]').forEach(el=>{ el.onchange=()=>editPostField(p.id,el.dataset.postField,el.value); }); $$('.pub-day button').forEach(b=>b.onclick=()=>editPostField(p.id,'post_date',b.dataset.date)); $('#savePostBtn')?.addEventListener('click',()=>savePost(p.id)); $('#dupPostBtn')?.addEventListener('click',()=>duplicatePost(p.id)); $('#deletePostBtn')?.addEventListener('click',()=>deletePost(p.id)); $$('.add-material-inline').forEach(b=>b.onclick=()=>openMaterialModal(null,p.id)); }
+  <div class="actions" style="margin-top:8px"><button class="btn" id="dupPostBtn">Дублировать</button><button class="btn danger" id="deletePostBtn" ${canEditPost(p)?'':'disabled'}>Скрыть</button></div>`;
+}
+
+function postDateField(p, disabled){
+  const labelText = p.post_date ? `${p.post_date} · ${dayRu(p.post_date)}` : 'дата не выбрана';
+  const open = state.datePicker?.postId === p.id;
+  return `<div class="date-field-wrap">
+    <button class="date-display" type="button" id="postDateToggle" ${disabled}>
+      <span class="date-display-main"><span class="date-display-date">${esc(labelText)}</span><span class="date-display-sub">календарь со слотами и хэштегами</span></span>
+      <span class="date-display-icon">▾</span>
+    </button>
+    ${open ? pubDatePicker(p) : ''}
+    <div class="shift-quick-row"><button class="btn" type="button" id="shiftPostDay" ${canEditPost(p)?'':'disabled'}>+1 день</button><button class="btn" type="button" id="shiftPostWeek" ${canEditPost(p)?'':'disabled'}>+1 неделя</button></div>
+  </div>`;
+}
+
+function pickerMonthStart(p){
+  const raw = state.datePicker?.month || p.post_date || iso(nextMonday());
+  const d = dateObj(raw) || nextMonday();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function pubDatePicker(p){
+  const m=pickerMonthStart(p);
+  const start=mondayOf(new Date(m.getFullYear(),m.getMonth(),1));
+  const cells=[];
+  for(let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); cells.push(pubDateCell(d,p,m.getMonth())); }
+  return `<div class="pub-calendar-pop"><div class="pub-cal-head"><button class="btn" type="button" id="pubPrevMonth">←</button><div class="pub-cal-title">${MONTHS[m.getMonth()]} ${m.getFullYear()}</div><div class="pub-cal-actions"><button class="btn" type="button" id="pubNextMonth">→</button><button class="btn" type="button" id="pubClosePicker">×</button></div></div><div class="pub-cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="pub-cal-grid">${cells.join('')}</div><div class="pub-cal-legend"><span><i class="pub-dot same"></i> этот же хэштег уже стоит</span><span><i class="pub-dot"></i> другие публикации</span><span><i class="pub-dot free"></i> хэштег свободен</span><span class="tag">v39-card</span></div></div>`;
+}
+function pubDateCell(day,p,monthIndex){
+  const ds=iso(day);
+  const sameHash=String(p.hashtag||'').trim();
+  const dayPosts=postsByDate(ds).filter(x=>x.id!==p.id);
+  const same=dayPosts.filter(x=>String(x.hashtag||'').trim()===sameHash && sameHash);
+  const other=day.getMonth()!==monthIndex;
+  const badges=[];
+  if(same.length) badges.push(`<span class="pub-badge same">хэштег занят</span>`);
+  dayPosts.filter(x=>x.hashtag!==p.hashtag).slice(0,3).forEach(x=>badges.push(`<span class="pub-badge">${esc(label('slot',x.slot,SLOTS[x.slot]?.[0]))} · ${esc(x.hashtag||'')}</span>`));
+  if(dayPosts.length>3) badges.push(`<span class="pub-badge">+${dayPosts.length-3} ещё</span>`);
+  return `<button type="button" class="pub-day ${other?'other':''} ${same.length?'same-tag':'available'} ${ds===p.post_date?'current':''}" data-date="${ds}" data-hash-state="${same.length?'same':'available'}"><div class="pub-day-num"><b>${day.getDate()}</b><span>${dayRu(ds)}</span></div><div class="pub-badges">${badges.join('')}</div></button>`;
+}
+function bindPostEditor(){
+  const p=selectedPost();
+  if(!p) return;
+  $$('[data-post-field]').forEach(el=>{ el.onchange=()=>editPostField(p.id,el.dataset.postField,el.value); });
+  $('#postDateToggle')?.addEventListener('click',()=>togglePostDatePicker(p.id));
+  $('#pubClosePicker')?.addEventListener('click',()=>{ state.datePicker=null; render(); });
+  $('#pubPrevMonth')?.addEventListener('click',()=>movePostDatePickerMonth(-1));
+  $('#pubNextMonth')?.addEventListener('click',()=>movePostDatePickerMonth(1));
+  $$('.pub-day[data-date]').forEach(b=>b.addEventListener('click',()=>{ state.datePicker=null; editPostField(p.id,'post_date',b.dataset.date); }));
+  $('#shiftPostDay')?.addEventListener('click',()=>shiftPostDate(p.id,1));
+  $('#shiftPostWeek')?.addEventListener('click',()=>shiftPostDate(p.id,7));
+  $('#savePostBtn')?.addEventListener('click',()=>savePost(p.id));
+  $('#dupPostBtn')?.addEventListener('click',()=>duplicatePost(p.id));
+  $('#deletePostBtn')?.addEventListener('click',()=>deletePost(p.id));
+  $$('.add-material-inline').forEach(b=>b.onclick=()=>openMaterialModal(null,p.id));
+}
+function togglePostDatePicker(id){
+  const p=state.posts.find(x=>x.id===id);
+  if(!p || !canEditPost(p)) return;
+  if(state.datePicker?.postId===id){ state.datePicker=null; render(); return; }
+  const d=dateObj(p.post_date)||nextMonday();
+  state.datePicker={postId:id,month:iso(new Date(d.getFullYear(),d.getMonth(),1))};
+  render();
+}
+function movePostDatePickerMonth(delta){
+  if(!state.datePicker) return;
+  const d=dateObj(state.datePicker.month)||new Date();
+  d.setMonth(d.getMonth()+delta);
+  state.datePicker.month=iso(new Date(d.getFullYear(),d.getMonth(),1));
+  render();
+}
+function shiftPostDate(id,days){
+  const p=state.posts.find(x=>x.id===id);
+  if(!p || !canEditPost(p) || !p.post_date) return;
+  const d=dateObj(p.post_date); d.setDate(d.getDate()+days);
+  editPostField(id,'post_date',iso(d));
+}
 function opts(cat,cur,fallback){ const rows=dictItems(cat); const arr=rows.length?rows.map(x=>[x.item_key,x.label]):Object.entries(fallback); return arr.map(([k,v])=>`<option value="${esc(k)}" ${k===cur?'selected':''}>${esc(Array.isArray(v)?v[0]:v)}</option>`).join(''); }
 function tagOptions(block,cur){ let arr=tagsForBlock(block); if(cur&&!arr.find(t=>t.hashtag===cur)) arr=[{hashtag:cur},...arr]; return arr.map(t=>`<option value="${esc(t.hashtag)}" ${t.hashtag===cur?'selected':''}>${esc(t.hashtag)}</option>`).join(''); }
 function editPostField(id,field,value){ const p=state.posts.find(x=>x.id===id); if(!p||!canEditPost(p)) return; if(field==='block'){ p.block=value; p.hashtag=tagsForBlock(value)[0]?.hashtag||p.hashtag; } else if(field==='post_date'){ p.post_date=value||null; } else { p[field]=value; } Object.assign(p, normalize(p)); state.dirty.add(id); sync(`${state.dirty.size} несохран.`,'saving'); logEvent('field_change','post',id,{field,value}); render(); }
@@ -83,7 +161,6 @@ async function duplicatePost(id){ const p=state.posts.find(x=>x.id===id); if(!p)
 async function deletePost(id){ if(!confirm('Скрыть пост?')) return; const p=state.posts.find(x=>x.id===id); p.is_deleted=true; await savePost(id); state.posts=state.posts.filter(x=>x.id!==id); state.selectedPost=filteredPosts()[0]?.id||null; await logEvent('delete_post','post',id); render(); }
 function materialsBox(p){ const rows=state.materials.filter(m=>m.post_id===p.id&&!m.is_deleted); return `<div class="material-box"><div class="save-line"><span class="section-label">Материалы к посту</span><button class="btn add-material-inline" type="button">+ ссылка</button></div>${rows.map(m=>`<a class="material-line" href="${esc(safeHref(m.url))}" target="_blank">${esc(m.title||m.url)}</a>`).join('')||'<div class="hint">Нет материалов</div>'}</div>`; }
 function safeHref(u){ u=String(u||'').trim(); return !u?'#':/^https?:\/\//i.test(u)?u:'https://'+u; }
-function pubDatePicker(p){ const start=mondayOf(p.post_date?dateObj(p.post_date):nextMonday()); let html='<div class="pub-calendar"><div class="pub-calendar-title">Дата: зелёный — хэштег свободен, красный — занят, фиолетовый — другие публикации</div><div class="pub-grid">'; for(let i=0;i<14;i++){ const d=new Date(start); d.setDate(start.getDate()+i); const ds=iso(d); const dayPosts=postsByDate(ds).filter(x=>x.id!==p.id); const same=dayPosts.filter(x=>x.hashtag===p.hashtag); html+=`<div class="pub-day ${same.length?'same':''} ${ds===p.post_date?'current':''}"><div class="pub-date">${dayRu(ds)}<span>${ds}</span></div><div class="pub-badges">${dayPosts.map(x=>`<span class="pub-badge ${x.hashtag===p.hashtag?'same':''}">${esc(label('slot',x.slot,SLOTS[x.slot]?.[0]))} · ${esc(x.hashtag||'')}</span>`).join('')}</div><button class="btn" data-date="${ds}">поставить</button></div>`; } return html+'</div></div>'; }
 function postsByDate(ds){ return state.posts.filter(p=>!p.is_deleted&&p.post_date===ds&&canReadPost(p)).sort(sortPost); }
 function renderCalendar(){ $('#workspace').innerHTML=`<section class="layout"><div class="panel calendar-panel"><div class="cal-nav"><button class="btn" id="prevMonth">←</button><div class="cal-title">${MONTHS[state.calDate.getMonth()]} ${state.calDate.getFullYear()}</div><button class="btn" id="nextMonth">→</button></div><div class="cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="cal-grid">${calendarCells()}</div></div><div class="panel editor-panel"><div class="panel-head"><div class="panel-title">Карточка поста</div></div><div class="panel-body">${postEditor()}</div></div></section>`; $('#prevMonth').onclick=()=>{state.calDate.setMonth(state.calDate.getMonth()-1); render();}; $('#nextMonth').onclick=()=>{state.calDate.setMonth(state.calDate.getMonth()+1); render();}; $$('.cal-cell[data-date]').forEach(c=>c.onclick=()=>openDayDrawer(c.dataset.date)); bindPostEditor(); }
 function calendarCells(){ const y=state.calDate.getFullYear(), m=state.calDate.getMonth(), first=new Date(y,m,1); let start=first.getDay(); start=start===0?6:start-1; const days=new Date(y,m+1,0).getDate(), prev=new Date(y,m,0).getDate(), today=iso(new Date()); let h=''; for(let i=0;i<start;i++) h+=`<div class="cal-cell other"><div class="cal-num">${prev-start+i+1}</div></div>`; for(let d=1;d<=days;d++){ const ds=iso(new Date(y,m,d)); h+=`<div class="cal-cell ${ds===today?'today':''}" data-date="${ds}"><div class="cal-num">${d}</div>${postsByDate(ds).map(p=>`<span class="cal-post" style="${badgeStyle(hex('block',p.block))}">${esc(label('slot',p.slot,SLOTS[p.slot]?.[0]))}: ${esc(p.topic)}</span>`).join('')}</div>`; } const rem=(start+days)%7===0?0:7-(start+days)%7; for(let i=1;i<=rem;i++) h+=`<div class="cal-cell other"><div class="cal-num">${i}</div></div>`; return h; }
