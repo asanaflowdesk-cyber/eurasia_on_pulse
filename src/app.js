@@ -26,13 +26,26 @@ const dict = (cat,key) => dictItems(cat).find(x=>x.item_key===key);
 const label = (cat,key,fallback='') => dict(cat,key)?.label || fallback || key || '—';
 const hex = (cat,key) => dict(cat,key)?.color_hex || COLORS[key] || '#1f5f5b';
 const tagsForBlock = block => state.tags.filter(t=>t.block===block&&t.is_active!==false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
-const canAdmin = () => state.profile?.role==='admin';
-const can = k => canAdmin() || !!state.profile?.[k];
-const canManage = () => canAdmin() || !!state.profile?.can_manage_users;
+const canAdmin = () => state.profile?.role === 'admin';
+
+// Права читаются буквально:
+// can_read_* = только видит;
+// can_edit_* = может создавать/сохранять/удалять, но только если can_read_* тоже true;
+// admin обходит проверки.
+const canReadFlag = key => canAdmin() || state.profile?.[key] === true;
+const canEditFlag = (readKey, editKey) => canAdmin() || (state.profile?.[readKey] === true && state.profile?.[editKey] === true);
+const canManage = () => canAdmin() || state.profile?.can_manage_users === true;
+const canReadHashtags = () => canReadFlag('can_read_hashtags');
+const canEditHashtags = () => canEditFlag('can_read_hashtags','can_edit_hashtags');
+const canReadDictionaries = () => canReadFlag('can_read_dictionaries');
+const canEditDictionaries = () => canEditFlag('can_read_dictionaries','can_edit_dictionaries');
+const canReadMaterials = () => canReadFlag('can_read_materials');
+const canEditMaterials = () => canEditFlag('can_read_materials','can_edit_materials');
+
 const tagAllowed = tag => !state.profile?.allowed_hashtags?.length || !tag || state.profile.allowed_hashtags.includes(tag);
 const isIdea = p => !p?.post_date;
-const canReadPost = p => canAdmin() || ((isIdea(p)?state.profile?.can_read_ideas:state.profile?.can_read_posts) && (state.profile?.data_scope==='all'||p.user_id===state.user?.id) && tagAllowed(p.hashtag));
-const canEditPost = p => canAdmin() || ((isIdea(p)?state.profile?.can_edit_ideas:state.profile?.can_edit_posts) && (state.profile?.data_scope==='all'||p.user_id===state.user?.id) && tagAllowed(p.hashtag));
+const canReadPost = p => canAdmin() || ((isIdea(p) ? state.profile?.can_read_ideas === true : state.profile?.can_read_posts === true) && (state.profile?.data_scope==='all'||p.user_id===state.user?.id) && tagAllowed(p.hashtag));
+const canEditPost = p => canAdmin() || ((isIdea(p) ? (state.profile?.can_read_ideas === true && state.profile?.can_edit_ideas === true) : (state.profile?.can_read_posts === true && state.profile?.can_edit_posts === true)) && (state.profile?.data_scope==='all'||p.user_id===state.user?.id) && tagAllowed(p.hashtag));
 
 window.addEventListener('error', e=>logError(e.error||e.message,'window.onerror'));
 window.addEventListener('unhandledrejection', e=>logError(e.reason,'unhandledrejection'));
@@ -53,7 +66,12 @@ function wire(){
 }
 async function login(){ try{ const email=$('#loginEmail').value.trim(); const password=$('#loginPassword').value; $('#authMessage').textContent=''; const {data,error}=await state.sb.auth.signInWithPassword({email,password}); if(error){ $('#authMessage').textContent=error.message; return; } state.user=data.user; await logEvent('login','auth'); await enterApp(); }catch(e){ $('#appView').classList.add('hidden'); $('#authView').classList.remove('hidden'); $('#authMessage').textContent=e.message||String(e); await logError(e,'login'); } }
 async function logout(){ if(state.dirty.size && !confirm('Есть несохранённые изменения. Выйти?')) return; await logEvent('logout','auth'); await state.sb.auth.signOut(); location.reload(); }
-async function enterApp(){ await loadAll(); $('#authView').classList.add('hidden'); $('#appView').classList.remove('hidden'); sync('загрузка...'); $('#userBadge').textContent=`${state.user.email} · ${state.profile.role}`; $('#accessTab').classList.toggle('hidden',!canManage()); $('#logsTab').classList.toggle('hidden',!canManage()); fillFilters(); render(); sync('загружено','ok'); await logEvent('app_open','ui'); }
+async function enterApp(){ await loadAll(); $('#authView').classList.add('hidden'); $('#appView').classList.remove('hidden'); sync('загрузка...'); $('#userBadge').textContent=`${state.user.email} · ${state.profile.role}`;
+  $('#accessTab').classList.toggle('hidden',!canManage());
+  $('#logsTab').classList.toggle('hidden',!canManage());
+  document.querySelector('[data-tab="dicts"]')?.classList.toggle('hidden', !(canReadDictionaries() || canReadHashtags()));
+  document.querySelector('[data-tab="materials"]')?.classList.toggle('hidden', !canReadMaterials());
+  fillFilters(); render(); sync('загружено','ok'); await logEvent('app_open','ui'); }
 async function loadAll(){
   const prof=await state.sb.from(TABLES.profiles).select('*').order('email'); if(prof.error) throw prof.error; state.profiles=prof.data||[]; state.profile=state.profiles.find(p=>String(p.email).toLowerCase()===String(state.user.email).toLowerCase()); if(!state.profile||!state.profile.is_active) throw new Error('Нет активного профиля доступа. Создай пользователя в pulse_profiles.');
   const [dicts,tags,posts,mats] = await Promise.all([
@@ -81,7 +99,7 @@ function postPassesFilters(p){
 function filteredPosts(){ return state.posts.filter(postPassesFilters).sort(sortPost); }
 function filtersArePostSpecific(){ const f=state.filters; return !!(f.dateFrom || f.dateTo || f.block!=='all' || f.status!=='all'); }
 function materialPassesFilters(m){
-  if(m.is_deleted) return false;
+  if(!canReadMaterials() || m.is_deleted) return false;
   const linked = state.posts.find(p=>p.id===m.post_id);
   if(linked && !postPassesFilters(linked)) return false;
   if(!linked && filtersArePostSpecific()) return false;
@@ -127,7 +145,14 @@ function ensureFilteredSelections(){
   }
 }
 function render(){ $('#saveAllBtn').classList.toggle('hidden',!state.dirty.size); ensureFilteredSelections(); const fn={plan:renderPlan,calendar:renderCalendar,bank:renderBank,materials:renderMaterials,dicts:renderDicts,access:renderAccess,logs:renderLogs}[state.activeTab]; fn?.(); }
-function switchTab(tab){ state.activeTab=tab; $$('#tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); logEvent('tab_switch','ui',null,{tab}); render(); }
+function switchTab(tab){
+  if(tab==='dicts' && !(canReadDictionaries() || canReadHashtags())){ toast('Нет права читать справочники или хэштеги','error'); tab='plan'; }
+  if(tab==='materials' && !canReadMaterials()){ toast('Нет права читать материалы','error'); tab='plan'; }
+  state.activeTab=tab;
+  $$('#tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  logEvent('tab_switch','ui',null,{tab});
+  render();
+}
 function layout(leftTitle,left,rightTitle,right){ $('#workspace').innerHTML=`<section class="layout"><div class="panel list-panel"><div class="panel-head"><div class="panel-title">${leftTitle}</div></div><div class="panel-body">${left}</div></div><div class="panel editor-panel"><div class="panel-head"><div class="panel-title">${rightTitle}</div></div><div class="panel-body">${right}</div></div></section>`; }
 function renderPlan(){ const f=filteredPosts().filter(p=>p.post_date); let html='',last=''; f.forEach(p=>{ const g=`КН ${p.week_no} · ${p.day_name} · ${p.post_date}`; if(g!==last){ html+=`<div class="day-head"><span>${esc(g)}</span><span>${postsByDate(p.post_date).length} пост(ов)</span></div>`; last=g; } html+=rowHtml(p); }); layout('Контент-план',html||'<div class="empty">Нет постов</div>','Карточка поста',postEditor()); bindPostRows(); bindPostEditor(); }
 function rowHtml(p){ return `<div class="post-row ${state.selectedPost===p.id?'selected':''} ${state.dirty.has(p.id)?'dirty':''}" data-id="${p.id}"><div><div>${esc(label('slot',p.slot,SLOTS[p.slot]?.[0]))}${state.dirty.has(p.id)?'<span class="dot"></span>':''}</div><div class="small muted">КН ${p.week_no}</div></div><div><span class="badge" style="${badgeStyle(hex('block',p.block))}">${esc(label('block',p.block,BLOCKS[p.block]))}</span></div><div><div class="topic">${esc(p.topic)}</div><div class="hashtag">${esc(p.hashtag||'')}</div></div><div><span class="badge" style="${badgeStyle(hex('status',p.status))}">${esc(label('status',p.status,STATUS[p.status]))}</span></div><div class="small muted">${esc(p.owner||'')}</div></div>`; }
@@ -237,34 +262,179 @@ async function savePost(id){ const p=state.posts.find(x=>x.id===id); if(!p) retu
 async function saveAllDirty(){ for(const id of [...state.dirty]) await savePost(id); }
 async function duplicatePost(id){ const p=state.posts.find(x=>x.id===id); if(!p) return; const copy=postPayload({...p,id:undefined,topic:p.topic+' — копия',status:'idea',user_id:state.user.id,owner:state.profile.display_name||state.user.email,sort_order:state.posts.length+1}); copy.user_id=state.user.id; const {data,error}=await state.sb.from(TABLES.posts).insert(copy).select().single(); if(error){toast(error.message,'error'); return;} state.posts.push(normalize(data)); state.selectedPost=data.id; await logEvent('duplicate_post','post',id,{new_id:data.id}); render(); }
 async function deletePost(id){ if(!confirm('Скрыть пост?')) return; const p=state.posts.find(x=>x.id===id); p.is_deleted=true; await savePost(id); state.posts=state.posts.filter(x=>x.id!==id); state.selectedPost=filteredPosts()[0]?.id||null; await logEvent('delete_post','post',id); render(); }
-function materialsBox(p){ const rows=state.materials.filter(m=>m.post_id===p.id&&!m.is_deleted); return `<div class="material-box"><div class="save-line"><span class="section-label">Материалы к посту</span><button class="btn add-material-inline" type="button">+ ссылка</button></div>${rows.map(m=>`<a class="material-line" href="${esc(safeHref(m.url))}" target="_blank">${esc(m.title||m.url)}</a>`).join('')||'<div class="hint">Нет материалов</div>'}</div>`; }
+function materialsBox(p){
+  if(!canReadMaterials()) return '';
+  const rows=state.materials.filter(m=>m.post_id===p.id&&!m.is_deleted);
+  const add=canEditMaterials()?'<button class="btn add-material-inline" type="button">+ ссылка</button>':'';
+  return `<div class="material-box"><div class="save-line"><span class="section-label">Материалы к посту</span>${add}</div>${rows.map(m=>`<a class="material-line" href="${esc(safeHref(m.url))}" target="_blank">${esc(m.title||m.url)}</a>`).join('')||'<div class="hint">Нет материалов</div>'}</div>`;
+}
 function safeHref(u){ u=String(u||'').trim(); return !u?'#':/^https?:\/\//i.test(u)?u:'https://'+u; }
 function postsByDate(ds){ return state.posts.filter(p=>p.post_date===ds&&postPassesFilters(p)).sort(sortPost); }
 function allReadablePostsByDate(ds){ return state.posts.filter(p=>!p.is_deleted&&p.post_date===ds&&canReadPost(p)).sort(sortPost); }
 function renderCalendar(){ $('#workspace').innerHTML=`<section class="layout"><div class="panel calendar-panel"><div class="cal-nav"><button class="btn" id="prevMonth">←</button><div class="cal-title">${MONTHS[state.calDate.getMonth()]} ${state.calDate.getFullYear()}</div><button class="btn" id="nextMonth">→</button></div><div class="cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="cal-grid">${calendarCells()}</div></div><div class="panel editor-panel"><div class="panel-head"><div class="panel-title">Карточка поста</div></div><div class="panel-body">${postEditor()}</div></div></section>`; $('#prevMonth').onclick=()=>{state.calDate.setMonth(state.calDate.getMonth()-1); render();}; $('#nextMonth').onclick=()=>{state.calDate.setMonth(state.calDate.getMonth()+1); render();}; $$('.cal-cell[data-date]').forEach(c=>c.onclick=()=>openDayDrawer(c.dataset.date)); bindPostEditor(); }
 function calendarCells(){ const y=state.calDate.getFullYear(), m=state.calDate.getMonth(), first=new Date(y,m,1); let start=first.getDay(); start=start===0?6:start-1; const days=new Date(y,m+1,0).getDate(), prev=new Date(y,m,0).getDate(), today=iso(new Date()); let h=''; for(let i=0;i<start;i++) h+=`<div class="cal-cell other"><div class="cal-num">${prev-start+i+1}</div></div>`; for(let d=1;d<=days;d++){ const ds=iso(new Date(y,m,d)); h+=`<div class="cal-cell ${ds===today?'today':''}" data-date="${ds}"><div class="cal-num">${d}</div>${postsByDate(ds).map(p=>`<span class="cal-post" style="${badgeStyle(hex('block',p.block))}">${esc(label('slot',p.slot,SLOTS[p.slot]?.[0]))}: ${esc(p.topic)}</span>`).join('')}</div>`; } const rem=(start+days)%7===0?0:7-(start+days)%7; for(let i=1;i<=rem;i++) h+=`<div class="cal-cell other"><div class="cal-num">${i}</div></div>`; return h; }
 function renderBank(){ const b=filteredPosts().filter(p=>!p.post_date||p.status==='idea'); layout('Банк идей',b.map(rowHtml).join('')||'<div class="empty">Нет идей</div>','Карточка идеи',postEditor()); bindPostRows(); bindPostEditor(); }
-function renderMaterials(){ const rows=state.materials.filter(materialPassesFilters); const list=`<div class="table-wrap"><table class="table"><thead><tr><th>Тип</th><th>Название</th><th>Ссылка</th><th>Пост</th></tr></thead><tbody>${rows.map(m=>`<tr class="${m.id===state.selectedMaterial?'selected':''}" data-mid="${m.id}"><td>${esc(label('material_type',m.material_type,m.material_type))}</td><td>${esc(m.title)}</td><td><a href="${esc(safeHref(m.url))}" target="_blank">${esc(m.url)}</a></td><td>${m.post_id?'да':'нет'}</td></tr>`).join('')}</tbody></table></div>`; layout('Материалы <button class="btn" id="newMaterialBtn">+ материал</button>',list,'Карточка материала',materialEditor()); $('#newMaterialBtn').onclick=()=>openMaterialModal(); $$('tr[data-mid]').forEach(r=>r.onclick=()=>{state.selectedMaterial=r.dataset.mid; logEvent('open_material','material',state.selectedMaterial); render();}); bindMaterialEditor(); }
+function renderMaterials(){
+  if(!canReadMaterials()){
+    $('#workspace').innerHTML='<div class="empty">Нет права читать материалы</div>';
+    return;
+  }
+  const rows=state.materials.filter(materialPassesFilters);
+  const addBtn=canEditMaterials() ? ' <button class="btn" id="newMaterialBtn">+ материал</button>' : '';
+  const list=`<div class="table-wrap"><table class="table"><thead><tr><th>Тип</th><th>Название</th><th>Ссылка</th><th>Пост</th></tr></thead><tbody>${rows.map(m=>`<tr class="${m.id===state.selectedMaterial?'selected':''}" data-mid="${m.id}"><td>${esc(label('material_type',m.material_type,m.material_type))}</td><td>${esc(m.title)}</td><td><a href="${esc(safeHref(m.url))}" target="_blank">${esc(m.url)}</a></td><td>${m.post_id?'да':'нет'}</td></tr>`).join('')}</tbody></table></div>`;
+  layout(`Материалы${addBtn}`,list,'Карточка материала',materialEditor());
+  $('#newMaterialBtn')?.addEventListener('click',()=>openMaterialModal());
+  $$('tr[data-mid]').forEach(r=>r.onclick=()=>{state.selectedMaterial=r.dataset.mid; logEvent('open_material','material',state.selectedMaterial); render();});
+  bindMaterialEditor();
+}
 function selectedMaterial(){ return state.materials.find(m=>m.id===state.selectedMaterial)||state.materials[0]; }
-function materialEditor(){ const m=selectedMaterial(); if(!m) return '<div class="empty">Выберите материал</div>'; return `<div class="grid2"><div class="form-row"><label>Тип</label><select id="matType">${opts('material_type',m.material_type,{link:'Ссылка',image:'Картинка',document:'Документ',video:'Видео',presentation:'Презентация',spreadsheet:'Таблица'})}</select></div><div class="form-row"><label>Пост</label><select id="matPost"><option value="">Без привязки</option>${state.posts.filter(canReadPost).map(p=>`<option value="${p.id}" ${p.id===m.post_id?'selected':''}>${esc((p.post_date||'без даты')+' · '+p.topic.slice(0,60))}</option>`).join('')}</select></div></div><div class="form-row"><label>Название</label><input id="matTitle" value="${esc(m.title||'')}"></div><div class="form-row"><label>Ссылка</label><input id="matUrl" value="${esc(m.url||'')}"></div><div class="form-row"><label>Описание</label><textarea id="matDesc">${esc(m.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="matDelete">Удалить</button><button class="btn primary" id="matSave">Сохранить материал</button></div>`; }
+function materialEditor(){
+  const m=selectedMaterial();
+  if(!canReadMaterials()) return '<div class="empty">Нет права читать материалы</div>';
+  if(!m) return '<div class="empty">Выберите материал</div>';
+  const ro=!canEditMaterials();
+  const d=ro?'disabled':'';
+  return `${ro?'<div class="message">Только чтение: редактирование материалов запрещено.</div>':''}<div class="grid2"><div class="form-row"><label>Тип</label><select id="matType" ${d}>${opts('material_type',m.material_type,{link:'Ссылка',image:'Картинка',document:'Документ',video:'Видео',presentation:'Презентация',spreadsheet:'Таблица'})}</select></div><div class="form-row"><label>Пост</label><select id="matPost" ${d}><option value="">Без привязки</option>${state.posts.filter(canReadPost).map(p=>`<option value="${p.id}" ${p.id===m.post_id?'selected':''}>${esc((p.post_date||'без даты')+' · '+p.topic.slice(0,60))}</option>`).join('')}</select></div></div><div class="form-row"><label>Название</label><input id="matTitle" value="${esc(m.title||'')}" ${d}></div><div class="form-row"><label>Ссылка</label><input id="matUrl" value="${esc(m.url||'')}" ${d}></div><div class="form-row"><label>Описание</label><textarea id="matDesc" ${d}>${esc(m.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="matDelete" ${ro?'disabled':''}>Удалить</button><button class="btn primary" id="matSave" ${ro?'disabled':''}>Сохранить материал</button></div>`;
+}
 function bindMaterialEditor(){ $('#matSave')?.addEventListener('click',()=>saveMaterial(selectedMaterial()?.id)); $('#matDelete')?.addEventListener('click',()=>deleteMaterial(selectedMaterial()?.id)); }
-function openMaterialModal(id=null,postId=null){ const m=id?state.materials.find(x=>x.id===id):{id:null,material_type:'link',title:'',url:'',description:'',post_id:postId||''}; $('#materialModalBody').innerHTML=`<form id="quickMatForm"><div class="grid2"><div class="form-row"><label>Тип</label><select id="qMatType">${opts('material_type',m.material_type,{link:'Ссылка',image:'Картинка',document:'Документ',video:'Видео'})}</select></div><div class="form-row"><label>Пост</label><select id="qMatPost"><option value="">Без привязки</option>${state.posts.filter(canReadPost).map(p=>`<option value="${p.id}" ${p.id===m.post_id?'selected':''}>${esc((p.post_date||'без даты')+' · '+p.topic.slice(0,60))}</option>`).join('')}</select></div></div><div class="form-row"><label>Название</label><input id="qMatTitle" value="${esc(m.title)}"></div><div class="form-row"><label>URL</label><input id="qMatUrl" value="${esc(m.url)}" required></div><div class="form-row"><label>Описание</label><textarea id="qMatDesc">${esc(m.description)}</textarea></div><div class="save-line"><button class="btn" type="button" data-close="materialModal">Отмена</button><button class="btn primary">Сохранить</button></div></form>`; $('#quickMatForm').onsubmit=async e=>{e.preventDefault(); await saveMaterial(null,true); closeModal('materialModal');}; openModalEl('materialModal'); }
-async function saveMaterial(id,quick=false){ const payload={material_type:$(quick?'#qMatType':'#matType').value,post_id:$(quick?'#qMatPost':'#matPost').value||null,title:$(quick?'#qMatTitle':'#matTitle').value.trim(),url:$(quick?'#qMatUrl':'#matUrl').value.trim(),description:$(quick?'#qMatDesc':'#matDesc').value.trim(),owner:state.profile.display_name||state.user.email,user_id:state.user.id,is_deleted:false,updated_at:new Date().toISOString()}; const q=id?state.sb.from(TABLES.materials).update(payload).eq('id',id).select().single():state.sb.from(TABLES.materials).insert(payload).select().single(); const {data,error}=await q; if(error){toast(error.message,'error'); await logError(error,'saveMaterial'); return;} state.materials=state.materials.filter(m=>m.id!==(id||data.id)); state.materials.unshift(data); state.selectedMaterial=data.id; await logEvent(id?'save_material':'create_material','material',data.id,payload); toast('Материал сохранён','ok'); render(); }
-async function deleteMaterial(id){ if(!id||!confirm('Удалить материал?'))return; const {error}=await state.sb.from(TABLES.materials).update({is_deleted:true,updated_at:new Date().toISOString()}).eq('id',id); if(error){toast(error.message,'error');return;} state.materials=state.materials.filter(m=>m.id!==id); await logEvent('delete_material','material',id); render(); }
-function renderDicts(){ const cats={block:'Блоки',hashtags:'Хэштеги',slot:'Слоты',status:'Статусы',format:'Форматы',audience:'Аудитории',material_type:'Типы материалов'}; const chips=Object.entries(cats).map(([k,v])=>`<button class="btn ${state.dictCategory===k?'primary':''}" data-cat="${k}">${v}</button>`).join(''); const list=state.dictCategory==='hashtags'?tagList():dictList(); const editor=state.dictCategory==='hashtags'?tagEditor():dictEditor(); layout('Справочники',`<div style="padding:8px;display:flex;gap:6px;flex-wrap:wrap">${chips}<button class="btn accent" id="newDictBtn">+ значение</button></div>${list}`,'Карточка значения',editor); $$('[data-cat]').forEach(b=>b.onclick=()=>{state.dictCategory=b.dataset.cat;state.selectedDict=null;state.selectedTag=null;render();}); $('#newDictBtn').onclick=()=> state.dictCategory==='hashtags'?newTag():newDict(); $$('tr[data-did]').forEach(r=>r.onclick=()=>{state.selectedDict=r.dataset.did;render();}); $$('tr[data-tid]').forEach(r=>r.onclick=()=>{state.selectedTag=r.dataset.tid;render();}); bindDictEditor(); }
+function openMaterialModal(id=null,postId=null){
+  if(!canEditMaterials()){ toast('Нет права редактировать материалы','error'); return; }
+  const m=id?state.materials.find(x=>x.id===id):{id:null,material_type:'link',title:'',url:'',description:'',post_id:postId||''};
+  $('#materialModalBody').innerHTML=`<form id="quickMatForm"><div class="grid2"><div class="form-row"><label>Тип</label><select id="qMatType">${opts('material_type',m.material_type,{link:'Ссылка',image:'Картинка',document:'Документ',video:'Видео'})}</select></div><div class="form-row"><label>Пост</label><select id="qMatPost"><option value="">Без привязки</option>${state.posts.filter(canReadPost).map(p=>`<option value="${p.id}" ${p.id===m.post_id?'selected':''}>${esc((p.post_date||'без даты')+' · '+p.topic.slice(0,60))}</option>`).join('')}</select></div></div><div class="form-row"><label>Название</label><input id="qMatTitle" value="${esc(m.title)}"></div><div class="form-row"><label>URL</label><input id="qMatUrl" value="${esc(m.url)}" required></div><div class="form-row"><label>Описание</label><textarea id="qMatDesc">${esc(m.description)}</textarea></div><div class="save-line"><button class="btn" type="button" data-close="materialModal">Отмена</button><button class="btn primary">Сохранить</button></div></form>`;
+  $('#quickMatForm').onsubmit=async e=>{e.preventDefault(); await saveMaterial(null,true); closeModal('materialModal');};
+  openModalEl('materialModal');
+}
+async async function saveMaterial(id,quick=false){
+  if(!canEditMaterials()){ toast('Нет права редактировать материалы','error'); return; }
+  const payload={material_type:$(quick?'#qMatType':'#matType').value,post_id:$(quick?'#qMatPost':'#matPost').value||null,title:$(quick?'#qMatTitle':'#matTitle').value.trim(),url:$(quick?'#qMatUrl':'#matUrl').value.trim(),description:$(quick?'#qMatDesc':'#matDesc').value.trim(),owner:state.profile.display_name||state.user.email,user_id:state.user.id,is_deleted:false,updated_at:new Date().toISOString()};
+  const q=id?state.sb.from(TABLES.materials).update(payload).eq('id',id).select().single():state.sb.from(TABLES.materials).insert(payload).select().single();
+  const {data,error}=await q;
+  if(error){toast(error.message,'error'); await logError(error,'saveMaterial'); return;}
+  state.materials=state.materials.filter(m=>m.id!==(id||data.id));
+  state.materials.unshift(data);
+  state.selectedMaterial=data.id;
+  await logEvent(id?'save_material':'create_material','material',data.id,payload);
+  toast('Материал сохранён','ok');
+  render();
+}
+async async function deleteMaterial(id){
+  if(!canEditMaterials()){ toast('Нет права удалять материалы','error'); return; }
+  if(!id||!confirm('Удалить материал?'))return;
+  const {error}=await state.sb.from(TABLES.materials).update({is_deleted:true,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){toast(error.message,'error');return;}
+  state.materials=state.materials.filter(m=>m.id!==id);
+  await logEvent('delete_material','material',id);
+  render();
+}
+function renderDicts(){
+  const canReadAny = canReadDictionaries() || canReadHashtags();
+  if(!canReadAny){ $('#workspace').innerHTML='<div class="empty">Нет права читать справочники или хэштеги</div>'; return; }
+
+  const cats={};
+  if(canReadDictionaries()){
+    Object.assign(cats,{block:'Блоки',slot:'Слоты',status:'Статусы',format:'Форматы',audience:'Аудитории',material_type:'Типы материалов'});
+  }
+  if(canReadHashtags()) cats.hashtags='Хэштеги';
+
+  if(!cats[state.dictCategory]) state.dictCategory=Object.keys(cats)[0] || 'hashtags';
+
+  const chips=Object.entries(cats).map(([k,v])=>`<button class="btn ${state.dictCategory===k?'primary':''}" data-cat="${k}">${v}</button>`).join('');
+  const list=state.dictCategory==='hashtags'?tagList():dictList();
+  const editor=state.dictCategory==='hashtags'?tagEditor():dictEditor();
+  const canCreate = state.dictCategory==='hashtags' ? canEditHashtags() : canEditDictionaries();
+  const addBtn = canCreate ? '<button class="btn accent" id="newDictBtn">+ значение</button>' : '';
+  layout('Справочники',`<div style="padding:8px;display:flex;gap:6px;flex-wrap:wrap">${chips}${addBtn}</div>${list}`,'Карточка значения',editor);
+  $$('[data-cat]').forEach(b=>b.onclick=()=>{state.dictCategory=b.dataset.cat;state.selectedDict=null;state.selectedTag=null;render();});
+  $('#newDictBtn')?.addEventListener('click',()=> state.dictCategory==='hashtags'?newTag():newDict());
+  $$('tr[data-did]').forEach(r=>r.onclick=()=>{state.selectedDict=r.dataset.did;render();});
+  $$('tr[data-tid]').forEach(r=>r.onclick=()=>{state.selectedTag=r.dataset.tid;render();});
+  bindDictEditor();
+}
 function dictList(){ const arr=dictItems(state.dictCategory).filter(dictPassesFilters); return `<div class="table-wrap"><table class="table"><thead><tr><th>Ключ</th><th>Название</th><th>Цвет</th><th>Сорт.</th></tr></thead><tbody>${arr.map(d=>`<tr data-did="${d.id}" class="${d.id===state.selectedDict?'selected':''}"><td>${esc(d.item_key)}</td><td>${esc(d.label)}</td><td>${esc(d.color_hex||'')}</td><td>${d.sort_order}</td></tr>`).join('')}</tbody></table></div>`; }
 function tagList(){ return `<div class="table-wrap"><table class="table"><thead><tr><th>Блок</th><th>Хэштег</th><th>Цвет</th><th>Сорт.</th></tr></thead><tbody>${state.tags.filter(dictPassesFilters).map(t=>`<tr data-tid="${t.id}" class="${t.id===state.selectedTag?'selected':''}"><td>${esc(label('block',t.block,t.block))}</td><td>${esc(t.hashtag)}</td><td>${esc(t.color_hex||'')}</td><td>${t.sort_order}</td></tr>`).join('')}</tbody></table></div>`; }
 function selectedDict(){ return state.dicts.find(d=>d.id===state.selectedDict)||dictItems(state.dictCategory)[0]; }
 function selectedTag(){ return state.tags.find(t=>t.id===state.selectedTag)||state.tags[0]; }
-function dictEditor(){ const d=selectedDict(); if(!d) return '<div class="empty">Выберите значение</div>'; return `<div class="grid2"><div class="form-row"><label>Категория</label><input id="dCat" value="${esc(d.category)}"></div><div class="form-row"><label>Ключ</label><input id="dKey" value="${esc(d.item_key)}"></div></div><div class="form-row"><label>Название</label><input id="dLabel" value="${esc(d.label)}"></div><div class="grid2"><div class="form-row"><label>HEX</label><input id="dColor" value="${esc(d.color_hex||'')}"></div><div class="form-row"><label>Сортировка</label><input id="dSort" type="number" value="${esc(d.sort_order||0)}"></div></div><div class="form-row"><label>Описание</label><textarea id="dDesc">${esc(d.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="deleteDict">Удалить</button><button class="btn primary" id="saveDict">Сохранить</button></div>`; }
-function tagEditor(){ const t=selectedTag(); if(!t) return '<div class="empty">Выберите хэштег</div>'; return `<div class="grid2"><div class="form-row"><label>Блок</label><select id="tBlock">${opts('block',t.block,BLOCKS)}</select></div><div class="form-row"><label>Хэштег</label><input id="tHash" value="${esc(t.hashtag)}"></div></div><div class="form-row"><label>Название</label><input id="tTitle" value="${esc(t.title||'')}"></div><div class="grid2"><div class="form-row"><label>HEX</label><input id="tColor" value="${esc(t.color_hex||'')}"></div><div class="form-row"><label>Сортировка</label><input id="tSort" type="number" value="${esc(t.sort_order||0)}"></div></div><div class="form-row"><label>Описание</label><textarea id="tDesc">${esc(t.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="deleteTag">Удалить</button><button class="btn primary" id="saveTag">Сохранить</button></div>`; }
+function dictEditor(){
+  if(!canReadDictionaries()) return '<div class="empty">Нет права читать справочники</div>';
+  const d=selectedDict();
+  if(!d) return '<div class="empty">Выберите значение</div>';
+  const ro=!canEditDictionaries();
+  const disabled=ro?'disabled':'';
+  return `${ro?'<div class="message">Только чтение: редактирование справочников запрещено.</div>':''}<div class="grid2"><div class="form-row"><label>Категория</label><input id="dCat" value="${esc(d.category)}" ${disabled}></div><div class="form-row"><label>Ключ</label><input id="dKey" value="${esc(d.item_key)}" ${disabled}></div></div><div class="form-row"><label>Название</label><input id="dLabel" value="${esc(d.label)}" ${disabled}></div><div class="grid2"><div class="form-row"><label>HEX</label><input id="dColor" value="${esc(d.color_hex||'')}" ${disabled}></div><div class="form-row"><label>Сортировка</label><input id="dSort" type="number" value="${esc(d.sort_order||0)}" ${disabled}></div></div><div class="form-row"><label>Описание</label><textarea id="dDesc" ${disabled}>${esc(d.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="deleteDict" ${ro?'disabled':''}>Удалить</button><button class="btn primary" id="saveDict" ${ro?'disabled':''}>Сохранить</button></div>`;
+}
+function tagEditor(){
+  if(!canReadHashtags()) return '<div class="empty">Нет права читать хэштеги</div>';
+  const t=selectedTag();
+  if(!t) return '<div class="empty">Выберите хэштег</div>';
+  const ro=!canEditHashtags();
+  const disabled=ro?'disabled':'';
+  return `${ro?'<div class="message">Только чтение: редактирование хэштегов запрещено.</div>':''}<div class="grid2"><div class="form-row"><label>Блок</label><select id="tBlock" ${disabled}>${opts('block',t.block,BLOCKS)}</select></div><div class="form-row"><label>Хэштег</label><input id="tHash" value="${esc(t.hashtag)}" ${disabled}></div></div><div class="form-row"><label>Название</label><input id="tTitle" value="${esc(t.title||'')}" ${disabled}></div><div class="grid2"><div class="form-row"><label>HEX</label><input id="tColor" value="${esc(t.color_hex||'')}" ${disabled}></div><div class="form-row"><label>Сортировка</label><input id="tSort" type="number" value="${esc(t.sort_order||0)}" ${disabled}></div></div><div class="form-row"><label>Описание</label><textarea id="tDesc" ${disabled}>${esc(t.description||'')}</textarea></div><div class="save-line"><button class="btn danger" id="deleteTag" ${ro?'disabled':''}>Удалить</button><button class="btn primary" id="saveTag" ${ro?'disabled':''}>Сохранить</button></div>`;
+}
 function bindDictEditor(){ $('#saveDict')?.addEventListener('click',saveDict); $('#deleteDict')?.addEventListener('click',deleteDict); $('#saveTag')?.addEventListener('click',saveTag); $('#deleteTag')?.addEventListener('click',deleteTag); }
-function newDict(){ const d={id:'new',category:state.dictCategory,item_key:'new_value',label:'Новое значение',description:'',color_hex:'#1f5f5b',is_active:true,sort_order:999}; state.dicts.unshift(d); state.selectedDict='new'; render(); }
-function newTag(){ const t={id:'new',block:'help',hashtag:'#новый_тег',title:'',description:'',color_hex:'#1f5f5b',is_active:true,sort_order:999}; state.tags.unshift(t); state.selectedTag='new'; render(); }
-async function saveDict(){ const id=selectedDict()?.id; const payload={category:$('#dCat').value,item_key:$('#dKey').value,label:$('#dLabel').value,description:$('#dDesc').value,color_hex:$('#dColor').value,is_active:true,sort_order:Number($('#dSort').value||0)}; const q=id==='new'?state.sb.from(TABLES.dicts).insert(payload).select().single():state.sb.from(TABLES.dicts).update(payload).eq('id',id).select().single(); const {data,error}=await q; if(error){toast(error.message,'error');return;} state.dicts=state.dicts.filter(x=>x.id!==id); state.dicts.push(data); state.selectedDict=data.id; await logEvent('save_dictionary','dictionary',data.id,payload); render(); }
-async function deleteDict(){ const id=selectedDict()?.id; if(!id||id==='new'||!confirm('Удалить значение?')) return; const {error}=await state.sb.from(TABLES.dicts).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.dicts=state.dicts.filter(x=>x.id!==id); state.selectedDict=null; await logEvent('delete_dictionary','dictionary',id); render(); }
-async function saveTag(){ const id=selectedTag()?.id; let h=$('#tHash').value.trim(); if(!h.startsWith('#')) h='#'+h; const payload={block:$('#tBlock').value,hashtag:h,title:$('#tTitle').value,description:$('#tDesc').value,color_hex:$('#tColor').value,is_active:true,sort_order:Number($('#tSort').value||0)}; const q=id==='new'?state.sb.from(TABLES.tags).insert(payload).select().single():state.sb.from(TABLES.tags).update(payload).eq('id',id).select().single(); const {data,error}=await q; if(error){toast(error.message,'error');return;} state.tags=state.tags.filter(x=>x.id!==id); state.tags.push(data); state.selectedTag=data.id; await logEvent('save_hashtag','hashtag',data.id,payload); render(); }
-async function deleteTag(){ const id=selectedTag()?.id; if(!id||id==='new'||!confirm('Удалить хэштег?')) return; const {error}=await state.sb.from(TABLES.tags).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.tags=state.tags.filter(x=>x.id!==id); state.selectedTag=null; await logEvent('delete_hashtag','hashtag',id); render(); }
+function newDict(){
+  if(!canEditDictionaries()){ toast('Нет права создавать значения справочников','error'); return; }
+  const d={id:'new',category:state.dictCategory,item_key:'new_value',label:'Новое значение',description:'',color_hex:'#1f5f5b',is_active:true,sort_order:999};
+  state.dicts.unshift(d);
+  state.selectedDict='new';
+  render();
+}
+function newTag(){
+  if(!canEditHashtags()){ toast('Нет права создавать хэштеги','error'); return; }
+  const t={id:'new',block:'help',hashtag:'#новый_тег',title:'',description:'',color_hex:'#1f5f5b',is_active:true,sort_order:999};
+  state.tags.unshift(t);
+  state.selectedTag='new';
+  render();
+}
+async async function saveDict(){
+  if(!canEditDictionaries()){ toast('Нет права редактировать справочники','error'); return; }
+  const id=selectedDict()?.id;
+  const payload={category:$('#dCat').value,item_key:$('#dKey').value,label:$('#dLabel').value,description:$('#dDesc').value,color_hex:$('#dColor').value,is_active:true,sort_order:Number($('#dSort').value||0)};
+  const q=id==='new'?state.sb.from(TABLES.dicts).insert(payload).select().single():state.sb.from(TABLES.dicts).update(payload).eq('id',id).select().single();
+  const {data,error}=await q;
+  if(error){toast(error.message,'error');return;}
+  state.dicts=state.dicts.filter(x=>x.id!==id);
+  state.dicts.push(data);
+  state.selectedDict=data.id;
+  await logEvent('save_dictionary','dictionary',data.id,payload);
+  render();
+}
+async async function deleteDict(){
+  if(!canEditDictionaries()){ toast('Нет права удалять справочники','error'); return; }
+  const id=selectedDict()?.id;
+  if(!id||id==='new'||!confirm('Удалить значение?')) return;
+  const {error}=await state.sb.from(TABLES.dicts).delete().eq('id',id);
+  if(error){toast(error.message,'error');return;}
+  state.dicts=state.dicts.filter(x=>x.id!==id);
+  state.selectedDict=null;
+  await logEvent('delete_dictionary','dictionary',id);
+  render();
+}
+async async function saveTag(){
+  if(!canEditHashtags()){ toast('Нет права редактировать хэштеги','error'); return; }
+  const id=selectedTag()?.id;
+  let h=$('#tHash').value.trim();
+  if(!h.startsWith('#')) h='#'+h;
+  const payload={block:$('#tBlock').value,hashtag:h,title:$('#tTitle').value,description:$('#tDesc').value,color_hex:$('#tColor').value,is_active:true,sort_order:Number($('#tSort').value||0)};
+  const q=id==='new'?state.sb.from(TABLES.tags).insert(payload).select().single():state.sb.from(TABLES.tags).update(payload).eq('id',id).select().single();
+  const {data,error}=await q;
+  if(error){toast(error.message,'error');return;}
+  state.tags=state.tags.filter(x=>x.id!==id);
+  state.tags.push(data);
+  state.selectedTag=data.id;
+  await logEvent('save_hashtag','hashtag',data.id,payload);
+  render();
+}
+async async function deleteTag(){
+  if(!canEditHashtags()){ toast('Нет права удалять хэштеги','error'); return; }
+  const id=selectedTag()?.id;
+  if(!id||id==='new'||!confirm('Удалить хэштег?')) return;
+  const {error}=await state.sb.from(TABLES.tags).delete().eq('id',id);
+  if(error){toast(error.message,'error');return;}
+  state.tags=state.tags.filter(x=>x.id!==id);
+  state.selectedTag=null;
+  await logEvent('delete_hashtag','hashtag',id);
+  render();
+}
 function renderAccess(){
   if(!canManage()){ $('#workspace').innerHTML='<div class="empty">Нет доступа</div>'; return;}
   const list=`<div class="table-wrap"><table class="table"><thead><tr><th>Email</th><th>Имя</th><th>Роль</th><th>Видит</th><th>Активен</th></tr></thead><tbody>${state.profiles.filter(profilePassesFilters).map(u=>`<tr data-uid="${u.id}" class="${u.id===state.selectedUser?'selected':''}"><td>${esc(u.email)}</td><td>${esc(u.display_name||'')}</td><td>${esc(u.role)}</td><td>${esc(u.data_scope)}</td><td>${u.is_active?'да':'нет'}</td></tr>`).join('')}</tbody></table></div>`;
@@ -299,6 +469,16 @@ function readProfilePayload(prefix){
     updated_at:new Date().toISOString()
   };
   $$(`[data-${prefix}-perm]`).forEach(x=>payload[x.getAttribute(`data-${prefix}-perm`)]=x.checked);
+
+  // Никакого двусмысленного read=write:
+  // если чтение выключено, редактирование этой зоны тоже принудительно выключается.
+  if(!payload.can_read_posts) payload.can_edit_posts=false;
+  if(!payload.can_read_ideas) payload.can_edit_ideas=false;
+  if(!payload.can_read_hashtags) payload.can_edit_hashtags=false;
+  if(!payload.can_read_materials) payload.can_edit_materials=false;
+  if(!payload.can_read_dictionaries) payload.can_edit_dictionaries=false;
+  if(payload.role !== 'admin' && !payload.can_manage_users) payload.can_manage_users=false;
+
   return payload;
 }
 function readUserCardPayload(){ return readProfilePayload('u'); }
@@ -357,6 +537,7 @@ async function resetAuthPasswordFromAccessCard(){
   }catch(e){ $('#authAdminResult').textContent=e.message; toast(e.message,'error'); await logError(e,'resetAuthPasswordFromAccessCard'); }
 }
 async function saveUser(){
+  if(!canManage()){ toast('Нет права управлять пользователями','error'); return; }
   const id=selectedUser()?.id;
   const payload=readUserCardPayload();
   if(!id){toast('Выберите пользователя','error');return;}
@@ -370,7 +551,7 @@ async function saveUser(){
   toast('Доступ сохранён','ok');
   render();
 }
-async function deleteUser(){ const id=selectedUser()?.id; if(!id||!confirm('Удалить профиль доступа? Auth-пользователь не удалится.'))return; const {error}=await state.sb.from(TABLES.profiles).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.profiles=state.profiles.filter(x=>x.id!==id); state.selectedUser=null; await logEvent('delete_user_access','profile',id); render(); }
+async function deleteUser(){ if(!canManage()){ toast('Нет права управлять пользователями','error'); return; } const id=selectedUser()?.id; if(!id||!confirm('Удалить профиль доступа? Auth-пользователь не удалится.'))return; const {error}=await state.sb.from(TABLES.profiles).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.profiles=state.profiles.filter(x=>x.id!==id); state.selectedUser=null; await logEvent('delete_user_access','profile',id); render(); }
 async function renderLogs(){ if(!canManage()){ $('#workspace').innerHTML='<div class="empty">Нет доступа</div>'; return;} const {data,error}=await state.sb.from(TABLES.logs).select('*').order('created_at',{ascending:false}).limit(300); if(error){ $('#workspace').innerHTML=`<div class="empty">${esc(error.message)}</div>`; return;} const rows=(data||[]).filter(logPassesFilters); $('#workspace').innerHTML=`<section class="panel" style="height:calc(100vh - 162px)"><div class="panel-head"><div class="panel-title">Логи</div></div><div class="panel-body"><table class="table"><thead><tr><th>Время</th><th>Email</th><th>Действие</th><th>Сущность</th><th>Детали</th></tr></thead><tbody>${rows.map(l=>`<tr><td>${esc(l.created_at)}</td><td>${esc(l.email)}</td><td>${esc(l.action)}</td><td>${esc(l.entity||'')}</td><td>${esc(JSON.stringify(l.details||{}))}</td></tr>`).join('')}</tbody></table></div></section>`; }
 function openPostModal(date=null){ $('#postModalBody').innerHTML=`<form id="newPostForm" class="modal-content"><div class="form-row"><label>Тема</label><input id="newTopic" required></div><div class="grid2"><div class="form-row"><label>Дата</label><input id="newDate" type="date" value="${esc(date||iso(nextMonday()))}"></div><div class="form-row"><label>Слот</label><select id="newSlot">${opts('slot','morning',SLOTS)}</select></div></div><div class="grid2"><div class="form-row"><label>Блок</label><select id="newBlock">${opts('block','help',BLOCKS)}</select></div><div class="form-row"><label>Хэштег</label><select id="newHash">${tagOptions('help')}</select></div></div><div class="form-row"><label>Цель</label><input id="newGoal"></div><div class="save-line"><button class="btn" type="button" data-close="postModal">Отмена</button><button class="btn primary">Добавить</button></div></form>`; $('#newBlock').onchange=()=>$('#newHash').innerHTML=tagOptions($('#newBlock').value); $('#newPostForm').onsubmit=async e=>{ e.preventDefault(); await createPost(); closeModal('postModal'); }; openModalEl('postModal'); }
 async function createPost(){ const p=normalize({user_id:state.user.id,post_date:$('#newDate').value||null,slot:$('#newSlot').value,block:$('#newBlock').value,hashtag:$('#newHash').value,topic:$('#newTopic').value.trim(),goal:$('#newGoal').value.trim(),format:'текст',cta:'',audience:'менеджеры / кураторы / филиалы',status:'idea',owner:state.profile.display_name||state.user.email,content_text:'',notes:'',is_deleted:false,sort_order:state.posts.length+1}); const payload={...postPayload(p),user_id:state.user.id}; const {data,error}=await state.sb.from(TABLES.posts).insert(payload).select().single(); if(error){toast(error.message,'error');return;} state.posts.push(normalize(data)); state.selectedPost=data.id; await logEvent('create_post','post',data.id,payload); render(); }
