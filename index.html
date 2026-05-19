@@ -31,7 +31,7 @@
   <section id="appView" class="app hidden">
     <header class="topbar">
       <div>
-        <div class="brand small-brand">Eurasia on Pulse <span id="buildMark">v42-card-v23</span></div>
+        <div class="brand small-brand">Eurasia on Pulse <span id="buildMark">v43-filters-date-range</span></div>
         <div class="sub">контент-план · материалы · доступы · логи · администрирование</div>
       </div>
       <div class="top-actions">
@@ -45,22 +45,25 @@
       </div>
     </header>
 
-    <nav class="tabs" id="tabs">
-      <button data-tab="plan" class="active">План</button>
-      <button data-tab="calendar">Календарь</button>
-      <button data-tab="bank">Банк идей</button>
-      <button data-tab="materials">Материалы</button>
-      <button data-tab="dicts">Справочники</button>
-      <button data-tab="access" id="accessTab">Доступы</button>
-      <button data-tab="logs" id="logsTab">Логи</button>
-    </nav>
+    <div class="nav-filter-row">
+      <nav class="tabs" id="tabs">
+        <button data-tab="plan" class="active">План</button>
+        <button data-tab="calendar">Календарь</button>
+        <button data-tab="bank">Банк идей</button>
+        <button data-tab="materials">Материалы</button>
+        <button data-tab="dicts">Справочники</button>
+        <button data-tab="access" id="accessTab">Доступы</button>
+        <button data-tab="logs" id="logsTab">Логи</button>
+      </nav>
 
-    <section class="filters" id="mainFilters">
-      <label>Неделя<select id="filterWeek"><option value="all">Все</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
-      <label>Блок<select id="filterBlock"></select></label>
-      <label>Статус<select id="filterStatus"></select></label>
-      <label>Поиск<input id="searchInput" placeholder="тема, хэштег, цель, CTA"></label>
-    </section>
+      <section class="filters compact-filters" id="mainFilters">
+        <label class="period-filter">Период<button id="dateRangeBtn" class="date-range-btn" type="button">Все даты</button></label>
+        <label>Блок<select id="filterBlock"></select></label>
+        <label>Статус<select id="filterStatus"></select></label>
+        <label class="search-filter">Поиск<input id="searchInput" placeholder="тема, хэштег, цель, CTA"></label>
+        <div id="dateRangePopover" class="date-range-popover hidden"></div>
+      </section>
+    </div>
 
     <main id="workspace"></main>
   </section>
