@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eurasia on Pulse</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="src/config/runtime-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/styles/main.css" />
+</head>
+<body>
+  <section id="authView" class="auth-wrap">
+    <div class="auth-card">
+      <div class="brand">Eurasia on Pulse</div>
+      <div class="sub">верификация пользователя</div>
+      <form id="loginForm" class="login-form">
+        <label>Email<input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Пароль<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary full" type="submit">Войти</button>
+      </form>
+      <div id="authMessage" class="message"></div>
+    </div>
+  </section>
+
+  <section id="appView" class="app hidden">
+    <header class="topbar">
+      <div>
+        <div class="brand small-brand">Eurasia on Pulse <span id="buildMark">v37-production-modular</span></div>
+        <div class="sub">контент-план · материалы · доступы · логи · администрирование</div>
+      </div>
+      <div class="top-actions">
+        <span id="syncStatus" class="sync"></span>
+        <span id="userBadge" class="user-badge"></span>
+        <button id="seedBtn" class="btn">Создать 3 недели</button>
+        <button id="newPostBtn" class="btn">+ пост</button>
+        <button id="excelBtn" class="btn accent">Excel выгрузка</button>
+        <button id="saveAllBtn" class="btn primary hidden">Сохранить изменения</button>
+        <button id="logoutBtn" class="btn">Выйти</button>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="plan" class="active">План</button>
+      <button data-tab="calendar">Календарь</button>
+      <button data-tab="bank">Банк идей</button>
+      <button data-tab="materials">Материалы</button>
+      <button data-tab="dicts">Справочники</button>
+      <button data-tab="access" id="accessTab">Доступы</button>
+      <button data-tab="logs" id="logsTab">Логи</button>
+    </nav>
+
+    <section class="filters" id="mainFilters">
+      <label>Неделя<select id="filterWeek"><option value="all">Все</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+      <label>Блок<select id="filterBlock"></select></label>
+      <label>Статус<select id="filterStatus"></select></label>
+      <label>Поиск<input id="searchInput" placeholder="тема, хэштег, цель, CTA"></label>
+    </section>
+
+    <main id="workspace"></main>
+  </section>
+
+  <div id="postModal" class="modal-wrap hidden"><div class="modal"><div class="modal-head"><h3>Новый пост</h3><button data-close="postModal" class="icon-btn">×</button></div><div id="postModalBody"></div></div></div>
+  <div id="materialModal" class="modal-wrap hidden"><div class="modal"><div class="modal-head"><h3>Материал</h3><button data-close="materialModal" class="icon-btn">×</button></div><div id="materialModalBody"></div></div></div>
+  <div id="excelModal" class="modal-wrap hidden"><div class="modal excel-modal"><div class="modal-head"><h3>Excel выгрузка <span class="tag">v37</span></h3><button data-close="excelModal" class="icon-btn">×</button></div><div id="excelModalBody"></div></div></div>
+  <div id="dayDrawer" class="drawer-wrap hidden"><aside class="drawer"><div class="drawer-head"><div><h3 id="drawerTitle">Планы на день</h3><div id="drawerSub" class="sub"></div></div><button data-close="dayDrawer" class="icon-btn">×</button></div><div id="drawerBody" class="drawer-body"></div><div class="drawer-actions"><span id="drawerStatus" class="hint"></span><button id="addPostToDayBtn" class="btn">+ пост в день</button><button id="saveDayBtn" class="btn primary">Сохранить день</button></div></aside></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
