@@ -1,3 +1,5 @@
+import './features/pulse-admin-user-flow.js';
+
 import { boot } from './app.js';
 import { $ } from './utils/dom.js';
 import { logError } from './services/logs.js';
