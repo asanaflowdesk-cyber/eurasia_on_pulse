@@ -100,7 +100,7 @@ function pubDatePicker(p){
   const start=mondayOf(new Date(m.getFullYear(),m.getMonth(),1));
   const cells=[];
   for(let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); cells.push(pubDateCell(d,p,m.getMonth())); }
-  return `<div class="pub-calendar-pop"><div class="pub-cal-head"><button class="btn" type="button" id="pubPrevMonth">←</button><div class="pub-cal-title">${MONTHS[m.getMonth()]} ${m.getFullYear()}</div><div class="pub-cal-actions"><button class="btn" type="button" id="pubNextMonth">→</button><button class="btn" type="button" id="pubClosePicker">×</button></div></div><div class="pub-cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="pub-cal-grid">${cells.join('')}</div><div class="pub-cal-legend"><span><i class="pub-dot same"></i> этот же хэштег уже стоит</span><span><i class="pub-dot"></i> другие публикации</span><span><i class="pub-dot free"></i> хэштег свободен</span><span class="tag">v39-card</span></div></div>`;
+  return `<div class="pub-calendar-pop"><div class="pub-cal-head"><button class="btn" type="button" id="pubPrevMonth">←</button><div class="pub-cal-title">${MONTHS[m.getMonth()]} ${m.getFullYear()}</div><div class="pub-cal-actions"><button class="btn" type="button" id="pubNextMonth">→</button><button class="btn" type="button" id="pubClosePicker">×</button></div></div><div class="pub-cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="pub-cal-grid">${cells.join('')}</div><div class="pub-cal-legend"><span><i class="pub-dot same"></i> этот же хэштег уже стоит</span><span><i class="pub-dot"></i> другие публикации</span><span><i class="pub-dot free"></i> хэштег свободен</span><span class="tag">v40-card-fit</span></div></div>`;
 }
 function pubDateCell(day,p,monthIndex){
   const ds=iso(day);
@@ -109,9 +109,10 @@ function pubDateCell(day,p,monthIndex){
   const same=dayPosts.filter(x=>String(x.hashtag||'').trim()===sameHash && sameHash);
   const other=day.getMonth()!==monthIndex;
   const badges=[];
-  if(same.length) badges.push(`<span class="pub-badge same">хэштег занят</span>`);
-  dayPosts.filter(x=>x.hashtag!==p.hashtag).slice(0,3).forEach(x=>badges.push(`<span class="pub-badge">${esc(label('slot',x.slot,SLOTS[x.slot]?.[0]))} · ${esc(x.hashtag||'')}</span>`));
-  if(dayPosts.length>3) badges.push(`<span class="pub-badge">+${dayPosts.length-3} ещё</span>`);
+  if(same.length) badges.push(`<span class="pub-badge same" title="Этот же хэштег уже стоит в этот день">хэштег занят</span>`);
+  const otherPosts = dayPosts.filter(x=>x.hashtag!==p.hashtag);
+  otherPosts.slice(0,2).forEach(x=>badges.push(`<span class="pub-badge" title="${esc(label('slot',x.slot,SLOTS[x.slot]?.[0]))} · ${esc(x.hashtag||'')}">${esc(label('slot',x.slot,SLOTS[x.slot]?.[0]))} · ${esc(x.hashtag||'')}</span>`));
+  if(otherPosts.length>2) badges.push(`<span class="pub-badge more" title="Ещё публикаций: ${otherPosts.length-2}">+${otherPosts.length-2}</span>`);
   return `<button type="button" class="pub-day ${other?'other':''} ${same.length?'same-tag':'available'} ${ds===p.post_date?'current':''}" data-date="${ds}" data-hash-state="${same.length?'same':'available'}"><div class="pub-day-num"><b>${day.getDate()}</b><span>${dayRu(ds)}</span></div><div class="pub-badges">${badges.join('')}</div></button>`;
 }
 function bindPostEditor(){
