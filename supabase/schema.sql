@@ -1,4 +1,4 @@
--- Eurasia on Pulse v5 — доступы, справочники, материалы, исправление календаря на уровне приложения
+-- Eurasia on Pulse v46 — production schema, one-click users, logs
 -- Выполнять в Supabase SQL Editor в том же проекте, URL которого подключён в приложении.
 -- Скрипт идемпотентный: можно запускать поверх v4.
 
@@ -194,7 +194,7 @@ begin
   select * into p from public.pulse_profiles where lower(email)=public.pulse_current_email() limit 1;
   if not found or not p.is_active then return false; end if;
   if p.role='admin' then return true; end if;
-  is_idea := row_date is null or (row_status='idea' and coalesce(row_week,0)>3);
+  is_idea := row_date is null;
   if is_idea and not p.can_read_ideas then return false; end if;
   if not is_idea and not p.can_read_posts then return false; end if;
   if p.data_scope='own' and row_owner <> auth.uid() then return false; end if;
@@ -213,7 +213,7 @@ begin
   select * into p from public.pulse_profiles where lower(email)=public.pulse_current_email() limit 1;
   if not found or not p.is_active then return false; end if;
   if p.role='admin' then return true; end if;
-  is_idea := row_date is null or (row_status='idea' and coalesce(row_week,0)>3);
+  is_idea := row_date is null;
   if is_idea and not p.can_edit_ideas then return false; end if;
   if not is_idea and not p.can_edit_posts then return false; end if;
   if p.data_scope='own' and row_owner <> auth.uid() then return false; end if;
