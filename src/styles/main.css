@@ -239,3 +239,10 @@
   .filters.compact-filters label.period-filter,.date-range-btn{width:100%!important;max-width:100%!important}
   .date-range-popover{position:fixed!important;left:12px!important;right:12px!important;top:118px!important;width:auto!important}
 }
+/* v47: user creation goes through a dedicated modal, access card is edit-only */
+.user-modal{width:min(920px,96vw)}
+.user-create-form .perm-grid,.user-create-form .tag-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+.admin-auth-box{background:#fbfaf7;border:1px solid var(--border);border-radius:12px;padding:10px;margin:10px 0;}
+.inline-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.message.compact{min-height:16px;margin-top:6px;}
+@media(max-width:900px){.user-create-form .perm-grid,.user-create-form .tag-grid{grid-template-columns:1fr 1fr}.user-modal{width:96vw}}

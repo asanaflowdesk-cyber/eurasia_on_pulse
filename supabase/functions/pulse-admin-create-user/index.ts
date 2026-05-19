@@ -38,7 +38,14 @@ function pickProfile(input: Record<string, unknown>) {
 
 async function assertAdmin(admin: ReturnType<typeof createClient>, token: string) {
   const { data: userData, error: userError } = await admin.auth.getUser(token);
-  if (userError || !userData.user?.email) throw new Error('Unauthorized');
+  if (userError) {
+    const msg = String(userError.message || userError);
+    if (msg.toLowerCase().includes('invalid credentials')) {
+      throw new Error('Invalid credentials: проверь SUPABASE_SERVICE_ROLE_KEY в Edge Function Secrets и что функция создана в том же Supabase-проекте, что frontend.');
+    }
+    throw new Error(`Unauthorized: ${msg}`);
+  }
+  if (!userData.user?.email) throw new Error('Unauthorized: active user session was not found');
   const email = userData.user.email.toLowerCase();
   const { data: profile, error } = await admin.from('pulse_profiles').select('id,email,role,is_active,can_manage_users').eq('email', email).single();
   if (error || !profile?.is_active || (profile.role !== 'admin' && profile.can_manage_users !== true)) throw new Error('Forbidden: admin role or can_manage_users required');

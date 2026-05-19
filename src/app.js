@@ -265,56 +265,89 @@ async function saveDict(){ const id=selectedDict()?.id; const payload={category:
 async function deleteDict(){ const id=selectedDict()?.id; if(!id||id==='new'||!confirm('Удалить значение?')) return; const {error}=await state.sb.from(TABLES.dicts).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.dicts=state.dicts.filter(x=>x.id!==id); state.selectedDict=null; await logEvent('delete_dictionary','dictionary',id); render(); }
 async function saveTag(){ const id=selectedTag()?.id; let h=$('#tHash').value.trim(); if(!h.startsWith('#')) h='#'+h; const payload={block:$('#tBlock').value,hashtag:h,title:$('#tTitle').value,description:$('#tDesc').value,color_hex:$('#tColor').value,is_active:true,sort_order:Number($('#tSort').value||0)}; const q=id==='new'?state.sb.from(TABLES.tags).insert(payload).select().single():state.sb.from(TABLES.tags).update(payload).eq('id',id).select().single(); const {data,error}=await q; if(error){toast(error.message,'error');return;} state.tags=state.tags.filter(x=>x.id!==id); state.tags.push(data); state.selectedTag=data.id; await logEvent('save_hashtag','hashtag',data.id,payload); render(); }
 async function deleteTag(){ const id=selectedTag()?.id; if(!id||id==='new'||!confirm('Удалить хэштег?')) return; const {error}=await state.sb.from(TABLES.tags).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.tags=state.tags.filter(x=>x.id!==id); state.selectedTag=null; await logEvent('delete_hashtag','hashtag',id); render(); }
-function renderAccess(){ if(!canManage()){ $('#workspace').innerHTML='<div class="empty">Нет доступа</div>'; return;} const list=`<div class="table-wrap"><table class="table"><thead><tr><th>Email</th><th>Имя</th><th>Роль</th><th>Видит</th><th>Активен</th></tr></thead><tbody>${state.profiles.filter(profilePassesFilters).map(u=>`<tr data-uid="${u.id}" class="${u.id===state.selectedUser?'selected':''}"><td>${esc(u.email)}</td><td>${esc(u.display_name||'')}</td><td>${esc(u.role)}</td><td>${esc(u.data_scope)}</td><td>${u.is_active?'да':'нет'}</td></tr>`).join('')}</tbody></table></div>`; layout('Пользователи <button class="btn" id="newUserBtn">+ пользователь</button>',list,'Карточка доступа',userEditor()); $('#newUserBtn').onclick=newUser; $$('tr[data-uid]').forEach(r=>r.onclick=()=>{state.selectedUser=r.dataset.uid;render();}); $('#saveUser')?.addEventListener('click',saveUser); $('#deleteUser')?.addEventListener('click',deleteUser); $('#genUserPassword')?.addEventListener('click',generateUserPassword); $('#copyUserPassword')?.addEventListener('click',()=>copyText($('#uPassword').value)); $('#createAuthUser')?.addEventListener('click',createAuthUserFromAccessCard); $('#resetAuthPassword')?.addEventListener('click',resetAuthPasswordFromAccessCard); }
+function renderAccess(){
+  if(!canManage()){ $('#workspace').innerHTML='<div class="empty">Нет доступа</div>'; return;}
+  const list=`<div class="table-wrap"><table class="table"><thead><tr><th>Email</th><th>Имя</th><th>Роль</th><th>Видит</th><th>Активен</th></tr></thead><tbody>${state.profiles.filter(profilePassesFilters).map(u=>`<tr data-uid="${u.id}" class="${u.id===state.selectedUser?'selected':''}"><td>${esc(u.email)}</td><td>${esc(u.display_name||'')}</td><td>${esc(u.role)}</td><td>${esc(u.data_scope)}</td><td>${u.is_active?'да':'нет'}</td></tr>`).join('')}</tbody></table></div>`;
+  layout('Пользователи <button class="btn" id="newUserBtn">+ пользователь</button>',list,'Карточка доступа',userEditor());
+  $('#newUserBtn').onclick=openUserCreateModal;
+  $$('tr[data-uid]').forEach(r=>r.onclick=()=>{state.selectedUser=r.dataset.uid;render();});
+  $('#saveUser')?.addEventListener('click',saveUser);
+  $('#deleteUser')?.addEventListener('click',deleteUser);
+  $('#genResetPassword')?.addEventListener('click',generateResetPassword);
+  $('#copyResetPassword')?.addEventListener('click',()=>copyText($('#resetPassword').value));
+  $('#resetAuthPassword')?.addEventListener('click',resetAuthPasswordFromAccessCard);
+}
 function selectedUser(){ return state.profiles.find(u=>u.id===state.selectedUser)||state.profiles[0]; }
-function newUser(){ const u={id:'new',email:'',display_name:'',role:'viewer',data_scope:'own',is_active:true,can_manage_users:false,can_read_posts:true,can_edit_posts:false,can_read_ideas:true,can_edit_ideas:false,can_read_hashtags:true,can_edit_hashtags:false,can_read_materials:true,can_edit_materials:false,can_read_dictionaries:true,can_edit_dictionaries:false,allowed_hashtags:[]}; state.profiles.unshift(u); state.selectedUser='new'; render(); }
-function readUserCardPayload(){
+function defaultUserProfile(){
+  return {id:'new',email:'',display_name:'',role:'viewer',data_scope:'own',is_active:true,can_manage_users:false,can_read_posts:true,can_edit_posts:false,can_read_ideas:true,can_edit_ideas:false,can_read_hashtags:true,can_edit_hashtags:false,can_read_materials:true,can_edit_materials:false,can_read_dictionaries:true,can_edit_dictionaries:false,allowed_hashtags:[]};
+}
+function permissionChecks(prefix,u){
+  const checks=[['can_read_posts','Читать план'],['can_edit_posts','Редактировать план'],['can_read_ideas','Читать идеи'],['can_edit_ideas','Редактировать идеи'],['can_read_hashtags','Читать хэштеги'],['can_edit_hashtags','Редактировать хэштеги'],['can_read_materials','Читать материалы'],['can_edit_materials','Редактировать материалы'],['can_read_dictionaries','Читать справочники'],['can_edit_dictionaries','Редактировать справочники'],['can_manage_users','Управлять пользователями']];
+  return checks.map(([k,l])=>`<label class="check"><input type="checkbox" data-${prefix}-perm="${k}" ${u[k]?'checked':''}>${l}</label>`).join('');
+}
+function hashtagChecks(prefix,u){
+  return state.tags.map(t=>`<label class="check"><input type="checkbox" data-${prefix}-tag="${esc(t.hashtag)}" ${u.allowed_hashtags?.includes(t.hashtag)?'checked':''}>${esc(t.hashtag)}</label>`).join('');
+}
+function readProfilePayload(prefix){
   const payload={
-    email:$('#uEmail').value.trim().toLowerCase(),
-    display_name:$('#uName').value.trim(),
-    role:$('#uRole').value,
-    data_scope:$('#uScope').value,
-    is_active:$('#uActive').value==='true',
-    allowed_hashtags:$$('[data-user-tag]:checked').map(x=>x.dataset.userTag),
+    email:$(`#${prefix}Email`).value.trim().toLowerCase(),
+    display_name:$(`#${prefix}Name`).value.trim(),
+    role:$(`#${prefix}Role`).value,
+    data_scope:$(`#${prefix}Scope`).value,
+    is_active:$(`#${prefix}Active`).value==='true',
+    allowed_hashtags:$$(`[data-${prefix}-tag]:checked`).map(x=>x.getAttribute(`data-${prefix}-tag`)),
     updated_at:new Date().toISOString()
   };
-  $$('[data-perm]').forEach(x=>payload[x.dataset.perm]=x.checked);
+  $$(`[data-${prefix}-perm]`).forEach(x=>payload[x.getAttribute(`data-${prefix}-perm`)]=x.checked);
   return payload;
 }
+function readUserCardPayload(){ return readProfilePayload('u'); }
 function userEditor(){
   const u=selectedUser();
   if(!u) return '<div class="empty">Выберите пользователя</div>';
-  const isNew=u.id==='new';
-  const checks=[['can_read_posts','Читать план'],['can_edit_posts','Редактировать план'],['can_read_ideas','Читать идеи'],['can_edit_ideas','Редактировать идеи'],['can_read_hashtags','Читать хэштеги'],['can_edit_hashtags','Редактировать хэштеги'],['can_read_materials','Читать материалы'],['can_edit_materials','Редактировать материалы'],['can_read_dictionaries','Читать справочники'],['can_edit_dictionaries','Редактировать справочники'],['can_manage_users','Управлять пользователями']];
   return `<div class="grid2"><div class="form-row"><label>Email</label><input id="uEmail" value="${esc(u.email)}" placeholder="user@company.kz"></div><div class="form-row"><label>Имя</label><input id="uName" value="${esc(u.display_name||'')}"></div></div>
   <div class="grid3"><div class="form-row"><label>Роль</label><select id="uRole"><option ${u.role==='viewer'?'selected':''}>viewer</option><option ${u.role==='editor'?'selected':''}>editor</option><option ${u.role==='admin'?'selected':''}>admin</option></select></div><div class="form-row"><label>Видимость</label><select id="uScope"><option value="own" ${u.data_scope==='own'?'selected':''}>своё</option><option value="all" ${u.data_scope==='all'?'selected':''}>всё</option></select></div><div class="form-row"><label>Активен</label><select id="uActive"><option value="true" ${u.is_active?'selected':''}>да</option><option value="false" ${!u.is_active?'selected':''}>нет</option></select></div></div>
-  <div class="perm-grid">${checks.map(([k,l])=>`<label class="check"><input type="checkbox" data-perm="${k}" ${u[k]?'checked':''}>${l}</label>`).join('')}</div>
-  <div class="section-label" style="margin-top:8px">Доступные хэштеги</div><div class="tag-grid">${state.tags.map(t=>`<label class="check"><input type="checkbox" data-user-tag="${esc(t.hashtag)}" ${u.allowed_hashtags?.includes(t.hashtag)?'checked':''}>${esc(t.hashtag)}</label>`).join('')}</div>
-  <div class="admin-auth-box"><div class="section-label">Пользователь приложения и пароль</div><div class="hint">Одна кнопка создаёт или синхронизирует пользователя сразу в Supabase Auth и pulse_profiles. Пароль генерируется автоматически. Никаких отдельных действий в Authentication делать не нужно.</div><div class="grid2"><div class="form-row"><label>Пароль</label><input id="uPassword" value="" readonly placeholder="сгенерируется автоматически"></div><div class="form-row"><label>Действия</label><div class="inline-actions"><button class="btn" id="genUserPassword" type="button">Сгенерировать</button><button class="btn" id="copyUserPassword" type="button">Копировать</button></div></div></div><div class="inline-actions auth-actions"><button class="btn accent" id="createAuthUser" type="button">${isNew?'Создать пользователя':'Синхронизировать Auth + доступ'}</button><button class="btn" id="resetAuthPassword" type="button" ${isNew?'disabled':''}>Сбросить пароль</button></div><div id="authAdminResult" class="message compact"></div></div>
-  <div class="save-line"><button class="btn danger" id="deleteUser" ${isNew?'disabled':''}>Удалить профиль доступа</button><button class="btn primary" id="saveUser">${isNew?'Создать пользователя':'Сохранить доступ'}</button></div>`;
+  <div class="perm-grid">${permissionChecks('u',u)}</div>
+  <div class="section-label" style="margin-top:8px">Доступные хэштеги</div><div class="tag-grid">${hashtagChecks('u',u)}</div>
+  <div class="admin-auth-box"><div class="section-label">Сброс пароля</div><div class="hint">Создание новых пользователей вынесено в отдельную модалку. В карточке редактируются права и сбрасывается пароль существующего Auth-пользователя.</div><div class="grid2"><div class="form-row"><label>Новый пароль</label><input id="resetPassword" value="" readonly placeholder="сгенерируется автоматически"></div><div class="form-row"><label>Действия</label><div class="inline-actions"><button class="btn" id="genResetPassword" type="button">Сгенерировать</button><button class="btn" id="copyResetPassword" type="button">Копировать</button><button class="btn" id="resetAuthPassword" type="button">Сбросить пароль</button></div></div></div><div id="authAdminResult" class="message compact"></div></div>
+  <div class="save-line"><button class="btn danger" id="deleteUser">Удалить профиль доступа</button><button class="btn primary" id="saveUser">Сохранить доступ</button></div>`;
 }
-function generateUserPassword(){ $('#uPassword').value=generatePassword(16); $('#authAdminResult').textContent='Пароль сгенерирован. Его можно скопировать и передать пользователю.'; }
-async function createAuthUserFromAccessCard(){
+function openUserCreateModal(){
+  const u=defaultUserProfile();
+  const password=generatePassword(16);
+  $('#userModalBody').innerHTML=`<form id="createUserForm" class="modal-content user-create-form"><div class="hint">Одна операция создаёт пользователя в Supabase Auth и профиль доступа в pulse_profiles. Пароль генерируется автоматически.</div><div class="grid2"><div class="form-row"><label>Email</label><input id="newUserEmail" type="email" required placeholder="user@company.kz"></div><div class="form-row"><label>Имя</label><input id="newUserName" placeholder="Имя пользователя"></div></div><div class="grid3"><div class="form-row"><label>Роль</label><select id="newUserRole"><option value="viewer" selected>viewer</option><option value="editor">editor</option><option value="admin">admin</option></select></div><div class="form-row"><label>Видимость</label><select id="newUserScope"><option value="own" selected>своё</option><option value="all">всё</option></select></div><div class="form-row"><label>Активен</label><select id="newUserActive"><option value="true" selected>да</option><option value="false">нет</option></select></div></div><div class="section-label">Права</div><div class="perm-grid">${permissionChecks('newUser',u)}</div><div class="section-label" style="margin-top:8px">Доступные хэштеги</div><div class="tag-grid">${hashtagChecks('newUser',u)}</div><div class="admin-auth-box"><div class="grid2"><div class="form-row"><label>Пароль</label><input id="newUserPassword" value="${esc(password)}" readonly></div><div class="form-row"><label>Действия</label><div class="inline-actions"><button class="btn" id="genNewUserPassword" type="button">Сгенерировать</button><button class="btn" id="copyNewUserPassword" type="button">Копировать</button></div></div></div><div id="newUserResult" class="message compact"></div></div><div class="save-line"><button class="btn" type="button" data-close="userModal">Отмена</button><button class="btn primary" type="submit">Создать пользователя</button></div></form>`;
+  $('#genNewUserPassword').onclick=()=>{ $('#newUserPassword').value=generatePassword(16); $('#newUserResult').textContent='Пароль сгенерирован.'; };
+  $('#copyNewUserPassword').onclick=()=>copyText($('#newUserPassword').value);
+  $('#createUserForm').onsubmit=async e=>{ e.preventDefault(); await createUserFromModal(); };
+  openModalEl('userModal');
+}
+async function createUserFromModal(){
   try{
-    const payload=readUserCardPayload();
+    const payload=readProfilePayload('newUser');
     if(!payload.email) throw new Error('Укажи email пользователя.');
-    if(!$('#uPassword').value) generateUserPassword();
-    const password=$('#uPassword').value;
-    if(!confirm(`Создать/синхронизировать Auth-аккаунт для ${payload.email} и сохранить доступы?`)) return;
-    $('#authAdminResult').textContent='Создание аккаунта...';
+    const password=$('#newUserPassword').value || generatePassword(16);
+    if(password.length<10) throw new Error('Пароль должен быть не короче 10 символов.');
+    if(!confirm(`Создать пользователя ${payload.email} в Auth и доступах?`)) return;
+    $('#newUserResult').textContent='Создание пользователя...';
     const result=await invokeAdminFunction('pulse-admin-create-user',{profile:payload,password});
-    if(result.profile){ state.profiles=state.profiles.filter(x=>x.id!==selectedUser()?.id && String(x.email).toLowerCase()!==String(result.profile.email).toLowerCase()); state.profiles.push(result.profile); state.selectedUser=result.profile.id; }
+    if(result.profile){
+      state.profiles=state.profiles.filter(x=>String(x.email).toLowerCase()!==String(result.profile.email).toLowerCase());
+      state.profiles.push(result.profile);
+      state.selectedUser=result.profile.id;
+    }
     await logEvent('admin_create_auth_user','profile',result.profile?.id||null,{email:payload.email,mode:result.mode});
-    $('#authAdminResult').innerHTML=`Готово: ${esc(result.mode||'created')}. Временный пароль: <b>${esc(password)}</b>`;
-    toast('Аккаунт создан/синхронизирован','ok'); render();
-  }catch(e){ $('#authAdminResult').textContent=e.message; toast(e.message,'error'); await logError(e,'createAuthUserFromAccessCard'); }
+    $('#newUserResult').innerHTML=`Готово. Временный пароль: <b>${esc(password)}</b>`;
+    toast('Пользователь создан','ok');
+    setTimeout(()=>{ closeModal('userModal'); render(); }, 650);
+  }catch(e){ $('#newUserResult').textContent=e.message; toast(e.message,'error'); await logError(e,'createUserFromModal'); }
 }
+function generateResetPassword(){ $('#resetPassword').value=generatePassword(16); $('#authAdminResult').textContent='Пароль сгенерирован. Его можно скопировать и передать пользователю.'; }
 async function resetAuthPasswordFromAccessCard(){
   try{
     const email=$('#uEmail').value.trim().toLowerCase();
     if(!email) throw new Error('Укажи email пользователя.');
-    if(!$('#uPassword').value) generateUserPassword();
-    const password=$('#uPassword').value;
+    if(!$('#resetPassword').value) generateResetPassword();
+    const password=$('#resetPassword').value;
     if(!confirm(`Сбросить пароль для ${email}?`)) return;
     $('#authAdminResult').textContent='Сброс пароля...';
     const result=await invokeAdminFunction('pulse-admin-reset-password',{email,password});
@@ -326,11 +359,8 @@ async function resetAuthPasswordFromAccessCard(){
 async function saveUser(){
   const id=selectedUser()?.id;
   const payload=readUserCardPayload();
+  if(!id){toast('Выберите пользователя','error');return;}
   if(!payload.email){toast('Укажи email','error');return;}
-  if(id==='new'){
-    await createAuthUserFromAccessCard();
-    return;
-  }
   const {data,error}=await state.sb.from(TABLES.profiles).update(payload).eq('id',id).select().single();
   if(error){toast(error.message,'error'); await logError(error,'saveUser'); return;}
   state.profiles=state.profiles.filter(x=>x.id!==id);
@@ -340,7 +370,7 @@ async function saveUser(){
   toast('Доступ сохранён','ok');
   render();
 }
-async function deleteUser(){ const id=selectedUser()?.id; if(!id||id==='new'||!confirm('Удалить профиль доступа?'))return; const {error}=await state.sb.from(TABLES.profiles).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.profiles=state.profiles.filter(x=>x.id!==id); state.selectedUser=null; await logEvent('delete_user_access','profile',id); render(); }
+async function deleteUser(){ const id=selectedUser()?.id; if(!id||!confirm('Удалить профиль доступа? Auth-пользователь не удалится.'))return; const {error}=await state.sb.from(TABLES.profiles).delete().eq('id',id); if(error){toast(error.message,'error');return;} state.profiles=state.profiles.filter(x=>x.id!==id); state.selectedUser=null; await logEvent('delete_user_access','profile',id); render(); }
 async function renderLogs(){ if(!canManage()){ $('#workspace').innerHTML='<div class="empty">Нет доступа</div>'; return;} const {data,error}=await state.sb.from(TABLES.logs).select('*').order('created_at',{ascending:false}).limit(300); if(error){ $('#workspace').innerHTML=`<div class="empty">${esc(error.message)}</div>`; return;} const rows=(data||[]).filter(logPassesFilters); $('#workspace').innerHTML=`<section class="panel" style="height:calc(100vh - 162px)"><div class="panel-head"><div class="panel-title">Логи</div></div><div class="panel-body"><table class="table"><thead><tr><th>Время</th><th>Email</th><th>Действие</th><th>Сущность</th><th>Детали</th></tr></thead><tbody>${rows.map(l=>`<tr><td>${esc(l.created_at)}</td><td>${esc(l.email)}</td><td>${esc(l.action)}</td><td>${esc(l.entity||'')}</td><td>${esc(JSON.stringify(l.details||{}))}</td></tr>`).join('')}</tbody></table></div></section>`; }
 function openPostModal(date=null){ $('#postModalBody').innerHTML=`<form id="newPostForm" class="modal-content"><div class="form-row"><label>Тема</label><input id="newTopic" required></div><div class="grid2"><div class="form-row"><label>Дата</label><input id="newDate" type="date" value="${esc(date||iso(nextMonday()))}"></div><div class="form-row"><label>Слот</label><select id="newSlot">${opts('slot','morning',SLOTS)}</select></div></div><div class="grid2"><div class="form-row"><label>Блок</label><select id="newBlock">${opts('block','help',BLOCKS)}</select></div><div class="form-row"><label>Хэштег</label><select id="newHash">${tagOptions('help')}</select></div></div><div class="form-row"><label>Цель</label><input id="newGoal"></div><div class="save-line"><button class="btn" type="button" data-close="postModal">Отмена</button><button class="btn primary">Добавить</button></div></form>`; $('#newBlock').onchange=()=>$('#newHash').innerHTML=tagOptions($('#newBlock').value); $('#newPostForm').onsubmit=async e=>{ e.preventDefault(); await createPost(); closeModal('postModal'); }; openModalEl('postModal'); }
 async function createPost(){ const p=normalize({user_id:state.user.id,post_date:$('#newDate').value||null,slot:$('#newSlot').value,block:$('#newBlock').value,hashtag:$('#newHash').value,topic:$('#newTopic').value.trim(),goal:$('#newGoal').value.trim(),format:'текст',cta:'',audience:'менеджеры / кураторы / филиалы',status:'idea',owner:state.profile.display_name||state.user.email,content_text:'',notes:'',is_deleted:false,sort_order:state.posts.length+1}); const payload={...postPayload(p),user_id:state.user.id}; const {data,error}=await state.sb.from(TABLES.posts).insert(payload).select().single(); if(error){toast(error.message,'error');return;} state.posts.push(normalize(data)); state.selectedPost=data.id; await logEvent('create_post','post',data.id,payload); render(); }
