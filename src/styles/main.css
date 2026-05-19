@@ -12,62 +12,71 @@
 @media(max-width:900px){.pub-calendar-pop{position:fixed;left:10px;right:10px;top:72px;width:auto}.pub-day{min-height:62px}.pub-cal-grid{gap:4px}}
 
 
-/* v40: fixed date picker — no editor vertical scroll, compact badges inside cells */
-.date-field-wrap{position:static!important}
+/* v41: date picker restored to preferred v23 layout */
+.date-field-wrap{position:relative!important}
 .pub-calendar-pop{
-  position:fixed!important;
-  left:50%!important;
-  top:50%!important;
-  transform:translate(-50%,-50%)!important;
+  position:absolute!important;
   z-index:1000!important;
-  width:min(720px,calc(100vw - 36px))!important;
-  max-height:calc(100vh - 36px)!important;
-  overflow:hidden!important;
-  padding:10px!important;
+  left:0!important;
+  top:52px!important;
+  transform:none!important;
+  width:min(650px,calc(100vw - 42px))!important;
+  max-height:none!important;
+  overflow:visible!important;
+  background:var(--surface)!important;
+  border:1px solid var(--border)!important;
+  border-radius:16px!important;
+  box-shadow:0 22px 70px rgba(20,18,14,.18)!important;
+  padding:12px!important;
 }
-.pub-cal-head{margin-bottom:6px!important}
-.pub-cal-title{font-size:20px!important}
-.pub-cal-week,.pub-cal-grid{gap:4px!important}
-.pub-cal-week div{padding:0 0 4px!important;font-size:8.5px!important}
+.pub-cal-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;margin-bottom:10px!important}
+.pub-cal-title{font-family:'Fraunces',serif!important;font-size:22px!important;font-weight:300!important}
+.pub-cal-actions{display:flex!important;gap:7px!important}
+.pub-cal-week,.pub-cal-grid{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:5px!important}
+.pub-cal-week div{text-align:center!important;font-size:9px!important;text-transform:uppercase!important;color:var(--muted2)!important;padding:2px 0 5px!important}
 .pub-day{
-  min-height:56px!important;
-  height:56px!important;
-  max-height:56px!important;
-  padding:5px!important;
-  gap:2px!important;
-  overflow:hidden!important;
-}
-.pub-day-num{font-size:9px!important;line-height:1!important}
-.pub-day-num b{font-size:11px!important;line-height:1!important}
-.pub-day-num span{font-size:8px!important}
-.pub-badges{
+  min-height:72px!important;
+  height:72px!important;
+  max-height:72px!important;
+  border:1px solid #b7dec3!important;
+  border-radius:10px!important;
+  background:#edf9f2!important;
+  padding:6px!important;
   display:flex!important;
   flex-direction:column!important;
-  gap:2px!important;
+  gap:4px!important;
+  text-align:left!important;
+  color:var(--text)!important;
   overflow:hidden!important;
-  min-height:0!important;
 }
+.pub-day.other{opacity:.44!important}
+.pub-day.current{box-shadow:inset 0 0 0 2px var(--accent)!important}
+.pub-day.same-tag,.pub-day[data-hash-state="same"]{background:#fff0ed!important;border-color:#f0a18f!important}
+.pub-day.available,.pub-day[data-hash-state="available"]{background:#edf9f2!important;border-color:#b7dec3!important}
+.pub-day-num{display:flex!important;justify-content:space-between!important;gap:4px!important;align-items:center!important;font-size:10px!important;line-height:1!important}
+.pub-day-num b{font-size:12px!important;line-height:1!important}
+.pub-day-num span{color:var(--muted2)!important;font-size:9px!important}
+.pub-badges{display:flex!important;flex-direction:column!important;gap:3px!important;min-height:0!important;overflow:hidden!important}
 .pub-badge{
   display:block!important;
   width:100%!important;
   max-width:100%!important;
-  box-sizing:border-box!important;
-  padding:1px 4px!important;
-  font-size:7.5px!important;
-  line-height:1.08!important;
-  border-radius:7px!important;
+  background:var(--violet-bg)!important;
+  color:var(--violet)!important;
+  border:1px solid #d7c8f1!important;
+  border-radius:999px!important;
+  padding:2px 5px!important;
+  font-size:8.5px!important;
+  line-height:1.15!important;
   white-space:nowrap!important;
   overflow:hidden!important;
   text-overflow:ellipsis!important;
 }
-.pub-badge.more{width:max-content!important;max-width:100%!important;padding:1px 5px!important}
-.pub-cal-legend{margin-top:6px!important;font-size:8.5px!important;gap:7px!important}
-.editor-panel .panel-body:has(.pub-calendar-pop){overflow:hidden!important}
-@media(max-height:720px){
-  .pub-calendar-pop{width:min(690px,calc(100vw - 24px))!important;padding:8px!important}
-  .pub-day{min-height:50px!important;height:50px!important;max-height:50px!important;padding:4px!important}
-  .pub-badge{font-size:7px!important;padding:1px 3px!important}
-  .pub-cal-title{font-size:18px!important}
-  .pub-cal-legend{display:none!important}
-}
-@media(max-width:900px){.pub-calendar-pop{position:fixed!important;left:50%!important;right:auto!important;top:50%!important;width:calc(100vw - 20px)!important;transform:translate(-50%,-50%)!important}.pub-day{min-height:48px!important;height:48px!important}}
+.pub-badge.same{background:var(--red-bg)!important;color:var(--red)!important;border-color:#e6bebe!important}
+.pub-cal-legend{display:flex!important;gap:10px!important;align-items:center!important;flex-wrap:wrap!important;margin-top:9px!important;font-size:9px!important;color:var(--muted2)!important}
+.pub-dot{display:inline-block!important;width:8px!important;height:8px!important;border-radius:50%!important;background:var(--violet-bg)!important;border:1px solid #d7c8f1!important;margin-right:4px!important}
+.pub-dot.same{background:var(--red-bg)!important;border-color:#e6bebe!important}
+.pub-dot.free{background:var(--green-bg)!important;border-color:#b7dec3!important}
+.editor-panel .panel-body:has(.pub-calendar-pop){overflow:visible!important}
+.editor-panel{overflow:visible!important}
+@media(max-width:900px){.pub-calendar-pop{position:fixed!important;left:10px!important;right:10px!important;top:72px!important;width:auto!important;transform:none!important}.pub-day{min-height:62px!important;height:62px!important;max-height:62px!important}.pub-cal-grid{gap:4px!important}}
