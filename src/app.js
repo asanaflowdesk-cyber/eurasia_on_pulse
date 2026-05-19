@@ -198,7 +198,7 @@ function pubDatePicker(p){
   const start=mondayOf(new Date(m.getFullYear(),m.getMonth(),1));
   const cells=[];
   for(let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); cells.push(pubDateCell(d,p,m.getMonth())); }
-  return `<div class="pub-calendar-pop"><div class="pub-cal-head"><button class="btn" type="button" id="pubPrevMonth">←</button><div class="pub-cal-title">${MONTHS[m.getMonth()]} ${m.getFullYear()}</div><div class="pub-cal-actions"><button class="btn" type="button" id="pubNextMonth">→</button><button class="btn" type="button" id="pubClosePicker">×</button></div></div><div class="pub-cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="pub-cal-grid">${cells.join('')}</div><div class="pub-cal-legend"><span><i class="pub-dot same"></i> текущий хэштег занят</span><span><i class="pub-dot occupied"></i> другие публикации внутри дня</span><span><i class="pub-dot free"></i> текущий хэштег свободен</span><span class="tag">v46-one-click-users</span></div></div>`;
+  return `<div class="pub-calendar-pop"><div class="pub-cal-head"><button class="btn" type="button" id="pubPrevMonth">←</button><div class="pub-cal-title">${MONTHS[m.getMonth()]} ${m.getFullYear()}</div><div class="pub-cal-actions"><button class="btn" type="button" id="pubNextMonth">→</button><button class="btn" type="button" id="pubClosePicker">×</button></div></div><div class="pub-cal-week"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="pub-cal-grid">${cells.join('')}</div><div class="pub-cal-legend"><span><i class="pub-dot same"></i> текущий хэштег занят</span><span><i class="pub-dot occupied"></i> другие публикации внутри дня</span><span><i class="pub-dot free"></i> текущий хэштег свободен</span><span class="tag">v50-inspected</span></div></div>`;
 }
 function pubDateCell(day,p,monthIndex){
   const ds=iso(day);
@@ -304,7 +304,7 @@ function openMaterialModal(id=null,postId=null){
   $('#quickMatForm').onsubmit=async e=>{e.preventDefault(); await saveMaterial(null,true); closeModal('materialModal');};
   openModalEl('materialModal');
 }
-async async function saveMaterial(id,quick=false){
+async function saveMaterial(id,quick=false){
   if(!canEditMaterials()){ toast('Нет права редактировать материалы','error'); return; }
   const payload={material_type:$(quick?'#qMatType':'#matType').value,post_id:$(quick?'#qMatPost':'#matPost').value||null,title:$(quick?'#qMatTitle':'#matTitle').value.trim(),url:$(quick?'#qMatUrl':'#matUrl').value.trim(),description:$(quick?'#qMatDesc':'#matDesc').value.trim(),owner:state.profile.display_name||state.user.email,user_id:state.user.id,is_deleted:false,updated_at:new Date().toISOString()};
   const q=id?state.sb.from(TABLES.materials).update(payload).eq('id',id).select().single():state.sb.from(TABLES.materials).insert(payload).select().single();
@@ -317,7 +317,7 @@ async async function saveMaterial(id,quick=false){
   toast('Материал сохранён','ok');
   render();
 }
-async async function deleteMaterial(id){
+async function deleteMaterial(id){
   if(!canEditMaterials()){ toast('Нет права удалять материалы','error'); return; }
   if(!id||!confirm('Удалить материал?'))return;
   const {error}=await state.sb.from(TABLES.materials).update({is_deleted:true,updated_at:new Date().toISOString()}).eq('id',id);
@@ -385,7 +385,7 @@ function newTag(){
   state.selectedTag='new';
   render();
 }
-async async function saveDict(){
+async function saveDict(){
   if(!canEditDictionaries()){ toast('Нет права редактировать справочники','error'); return; }
   const id=selectedDict()?.id;
   const payload={category:$('#dCat').value,item_key:$('#dKey').value,label:$('#dLabel').value,description:$('#dDesc').value,color_hex:$('#dColor').value,is_active:true,sort_order:Number($('#dSort').value||0)};
@@ -398,7 +398,7 @@ async async function saveDict(){
   await logEvent('save_dictionary','dictionary',data.id,payload);
   render();
 }
-async async function deleteDict(){
+async function deleteDict(){
   if(!canEditDictionaries()){ toast('Нет права удалять справочники','error'); return; }
   const id=selectedDict()?.id;
   if(!id||id==='new'||!confirm('Удалить значение?')) return;
@@ -409,7 +409,7 @@ async async function deleteDict(){
   await logEvent('delete_dictionary','dictionary',id);
   render();
 }
-async async function saveTag(){
+async function saveTag(){
   if(!canEditHashtags()){ toast('Нет права редактировать хэштеги','error'); return; }
   const id=selectedTag()?.id;
   let h=$('#tHash').value.trim();
@@ -424,7 +424,7 @@ async async function saveTag(){
   await logEvent('save_hashtag','hashtag',data.id,payload);
   render();
 }
-async async function deleteTag(){
+async function deleteTag(){
   if(!canEditHashtags()){ toast('Нет права удалять хэштеги','error'); return; }
   const id=selectedTag()?.id;
   if(!id||id==='new'||!confirm('Удалить хэштег?')) return;
@@ -509,7 +509,7 @@ async function createUserFromModal(){
     if(password.length<10) throw new Error('Пароль должен быть не короче 10 символов.');
     if(!confirm(`Создать пользователя ${payload.email} в Auth и доступах?`)) return;
     $('#newUserResult').textContent='Создание пользователя...';
-    const result=await invokeAdminFunction('pulse-admin-create-user',{profile:payload,password});
+    const result=await invokeAdminFunction('pulse-admin-create-user',{profile:{...payload,password},password});
     if(result.profile){
       state.profiles=state.profiles.filter(x=>String(x.email).toLowerCase()!==String(result.profile.email).toLowerCase());
       state.profiles.push(result.profile);

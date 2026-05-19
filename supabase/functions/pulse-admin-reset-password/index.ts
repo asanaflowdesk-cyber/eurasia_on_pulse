@@ -17,7 +17,7 @@ function randomPassword(length = 14): string {
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
 }
 function getServiceRoleKey(): string {
-  return str(Deno.env.get("PULSE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+  return str(Deno.env.get("PULSE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY"));
 }
 async function findAuthUserByEmail(admin: any, email: string) {
   let page = 1;

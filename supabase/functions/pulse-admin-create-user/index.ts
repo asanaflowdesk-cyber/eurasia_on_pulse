@@ -62,8 +62,7 @@ function randomPassword(length = 14): string {
 function getServiceRoleKey(): string {
   return str(
     Deno.env.get("PULSE_SERVICE_ROLE_KEY") ||
-      Deno.env.get("SERVICE_ROLE_KEY") ||
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      Deno.env.get("SERVICE_ROLE_KEY"),
   );
 }
 
@@ -138,7 +137,10 @@ Deno.serve(async (req) => {
 
     const email = normalizeEmail(pick(raw, ["email", "user_email", "userEmail", "login"]));
     const displayName = str(pick(raw, ["display_name", "displayName", "name", "full_name", "fullName"], email));
-    const password = str(pick(raw, ["password", "new_password", "newPassword"])) || randomPassword();
+    const password = str(
+      pick(raw, ["password", "new_password", "newPassword"]) ||
+        pick(body as Record<string, unknown>, ["password", "new_password", "newPassword"]),
+    ) || randomPassword();
 
     if (!email) throw new Error("Email обязателен. Frontend прислал пустой email в payload.");
     if (password.length < 6) throw new Error("Пароль должен быть не короче 6 символов.");

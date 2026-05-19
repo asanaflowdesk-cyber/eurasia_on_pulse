@@ -31,7 +31,7 @@ export async function invokeAdminFunction(name, payload){
     }catch(_){}
 
     if(String(message).toLowerCase().includes('invalid credentials')){
-      message = 'Edge Function вернула Invalid credentials. Обычно причина: в Supabase Function Secrets указан неверный SUPABASE_SERVICE_ROLE_KEY или функция создана не в том проекте Supabase.';
+      message = 'Edge Function вернула Invalid credentials. Обычно причина: в Supabase Function Secrets указан неверный PULSE_SERVICE_ROLE_KEY или функция создана не в том проекте Supabase.';
     }
 
     throw new Error(message);
